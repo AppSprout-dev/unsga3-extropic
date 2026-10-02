@@ -8,6 +8,7 @@ This package centers a weight-sweep archive on three samplers:
 
 ```text
 weight niches          WeightSweepLoop + simplex_weights / custom w
+niche survival         Archive.niche_survival (ideal–nadir, perpendicular distance, closer occupant)
 Ising-native search    ThrmlIsingBackend + problems/codon_ising.py
 Potts-native search    ThrmlPottsBackend + problems/potts_chain.py
 general objectives     ExactEwMetropolisBackend

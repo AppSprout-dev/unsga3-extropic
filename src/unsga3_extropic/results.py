@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 from unsga3_extropic.fidelity import compare_fronts
-from unsga3_extropic.loop import AnnealConfig, WeightSweepLoop
+from unsga3_extropic.loop import AnnealConfig, LoopResult, WeightSweepLoop
 from unsga3_extropic.problems.potts_chain import PottsChainProblem
 
 SCHEMA_VERSION = 1
@@ -247,6 +247,68 @@ def stub_run_record(*, front_path: Path) -> dict:
     }
 
 
+def build_measured_record(
+    result: LoopResult,
+    *,
+    anneal: AnnealConfig,
+    base_seed: int,
+    issue: str,
+    phase: str,
+    problem: str,
+    backend: str,
+    front_path: Path,
+    notes: str,
+    reference: np.ndarray | None = None,
+) -> dict:
+    """Validate a run record for one finished ``WeightSweepLoop``.
+
+    ``metrics.nd_count`` is the non-dominated archive. The notes gain one
+    sentence with the quota-1 niche survivor count. The front file is
+    ``front_path`` (``.npz`` key ``front``).
+    """
+    _decisions, front = result.nondominated_front()
+    scores = compare_fronts(front, reference)
+    niche = result.niche_front()
+    front_path = Path(front_path)
+    front_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(front_path, front=np.asarray(front, dtype=np.float64))
+    seeds = [base_seed + _SEED_STRIDE * i for i in range(len(result.weights))]
+    niche_note = (
+        f"Closer-in-niche survival kept {len(niche.objectives)} occupants "
+        f"across {len(result.weights)} directions (quota 1). "
+        "metrics.nd_count is the non-dominated archive."
+    )
+    record = {
+        "schema_version": SCHEMA_VERSION,
+        "date": utc_now_iso(),
+        "git_sha": current_git_sha(),
+        "issue": issue,
+        "phase": phase,
+        "problem": problem,
+        "backend": backend,
+        "seeds": seeds,
+        "schedule": {
+            "betas": [float(beta) for beta in anneal.betas],
+            "n_warmup": int(anneal.n_warmup),
+            "n_samples": int(anneal.n_samples),
+            "steps_per_sample": int(anneal.steps_per_sample),
+            "n_weights": int(len(result.weights)),
+        },
+        "eval_budget": int(result.total_evals),
+        "metrics": {
+            "nd_count": int(scores["nd_count"]),
+            "hypervolume_2d": scores["hypervolume_2d"],
+            "hv_ref": scores["hv_ref"],
+            "generational_distance": scores["generational_distance"],
+            "coverage": scores["coverage"],
+        },
+        "artifacts": {"front": display_path(front_path)},
+        "notes": notes.rstrip() + " " + niche_note,
+    }
+    validate_run_record(record)
+    return record
+
+
 def measure_potts_chain(*, smoke: bool, front_path: Path) -> dict:
     """Sample ``PottsChainProblem`` and return a validated run record.
 
@@ -290,45 +352,22 @@ def measure_potts_chain(*, smoke: bool, front_path: Path) -> dict:
         n_obj=2,
     )
     result = loop.run()
-    _decisions, front = result.nondominated_front()
     _exact_x, exact = problem.enumerate_front()
-    scores = compare_fronts(front, exact)
-    front_path = Path(front_path)
-    front_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(front_path, front=np.asarray(front, dtype=np.float64))
-    seeds = [base_seed + _SEED_STRIDE * i for i in range(len(weights))]
-    record = {
-        "schema_version": SCHEMA_VERSION,
-        "date": utc_now_iso(),
-        "git_sha": current_git_sha(),
-        "issue": "4",
-        "phase": "1",
-        "problem": "potts_chain",
-        "backend": "thrml_potts",
-        "seeds": seeds,
-        "schedule": {
-            "betas": [float(b) for b in anneal.betas],
-            "n_warmup": int(anneal.n_warmup),
-            "n_samples": int(anneal.n_samples),
-            "steps_per_sample": int(anneal.steps_per_sample),
-            "n_weights": int(len(weights)),
-        },
-        "eval_budget": int(result.total_evals),
-        "metrics": {
-            "nd_count": int(scores["nd_count"]),
-            "hypervolume_2d": scores["hypervolume_2d"],
-            "hv_ref": scores["hv_ref"],
-            "generational_distance": scores["generational_distance"],
-            "coverage": scores["coverage"],
-        },
-        "artifacts": {"front": display_path(front_path)},
-        "notes": (
+    return build_measured_record(
+        result,
+        anneal=anneal,
+        base_seed=base_seed,
+        issue="4",
+        phase="1",
+        problem="potts_chain",
+        backend="thrml_potts",
+        front_path=front_path,
+        reference=exact,
+        notes=(
             "GD and coverage compare the non-dominated archive to "
             "PottsChainProblem.enumerate_front (minimization). "
             "eval_budget counts recorded samples. "
             "Fidelity metrics are the in-repo harness (issue 6). "
             "Domain-wall Ising is issue 10 and is not this run."
         ),
-    }
-    validate_run_record(record)
-    return record
+    )

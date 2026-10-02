@@ -56,4 +56,5 @@ def test_weight_sweep_summary_is_json_safe():
     summary = result.summary()
     assert summary["n_weights"] == 3
     assert "hv_2d_data_ref" in summary
+    assert 1 <= summary["archive_niche"] <= summary["archive_nd_unique"]
     json.dumps(summary)

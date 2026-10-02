@@ -18,7 +18,7 @@ Each line of a JSONL file is one object matching [`run_record.schema.json`](run_
 | `metrics.generational_distance` | Mean Euclidean distance from the run front to the reference front. Null when either front is empty |
 | `metrics.coverage` | Fraction of the **reference** front weakly dominated by the run front (minimization). Null when either front is empty |
 | `artifacts.front` | Path to the run's non-dominated front, `.npy` or `.npz` shape `(n, M)`. An `.npz` stores the array as `front`, or as its only array |
-| `notes` | Free text. The Potts smoke says the reference is `PottsChainProblem.enumerate_front` |
+| `notes` | Free text. A measured run names its reference front. It also records how many closer occupants niche survival kept (quota 1). `metrics.nd_count` stays the non-dominated archive size |
 
 Front files are local artifacts (gitignored under `artifacts/` next to the JSONL). Commit the JSONL when a number should stay in the history. The loader is `unsga3_extropic.fidelity.load_front`. It does not launch Bend, C#, or ZDT1.
 
@@ -29,4 +29,4 @@ python benchmarks/append_run.py --smoke --out benchmarks/records/runs.jsonl
 
 `--stub` writes a schema-valid row with null HV / GD / coverage and does not sample. `--smoke` runs the in-repo Potts chain (THRML, issue 4) and fills metrics with the harness from issue 6. Neither command searches for a beta schedule.
 
-`demos/run_potts_thrml.py` writes the same kind of record under `demos/_out/`.
+`demos/run_codon_thrml.py` and `demos/run_potts_thrml.py` append the same kind of record under `demos/_out/` and to `benchmarks/records/runs.jsonl`. The codon line is issue `5` / phase `2`. The Potts line stays issue `4` / phase `1` and mentions the niche count in `notes`.

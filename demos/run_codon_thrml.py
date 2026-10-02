@@ -24,6 +24,7 @@ import numpy as np
 
 from unsga3_extropic import AnnealConfig, WeightSweepLoop, __version__
 from unsga3_extropic.problems import CodonIsingProblem
+from unsga3_extropic.results import append_run_record, build_measured_record
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -102,6 +103,26 @@ def main(argv: list[str] | None = None) -> int:
         float(len(found & exact) / len(exact)) if exact else 0.0
     )
 
+    record = build_measured_record(
+        result,
+        anneal=anneal,
+        base_seed=7,
+        issue="5",
+        phase="2",
+        problem="codon_ising",
+        backend="thrml_ising",
+        front_path=out_dir / "codon_front.npz",
+        reference=f_exact,
+        notes=(
+            "GD and coverage compare the non-dominated archive to "
+            "CodonIsingProblem.enumerate_front (minimization). "
+            "eval_budget counts recorded samples. "
+            "Candidates come from sample_weight only."
+        ),
+    )
+    append_run_record(out_dir / "codon_runs.jsonl", record)
+    append_run_record(ROOT / "benchmarks" / "records" / "runs.jsonl", record)
+
     print("=== unsga3-extropic codon THRML demo ===")
     for k, v in summary.items():
         print(f"  {k}: {v}")
@@ -111,6 +132,8 @@ def main(argv: list[str] | None = None) -> int:
     np.save(out_dir / "codon_front.npy", f_nd)
     np.save(out_dir / "codon_exact_front.npy", f_exact)
     print(f"  wrote {out_dir}/codon_summary.json")
+    print(f"  appended {out_dir / 'codon_runs.jsonl'}")
+    print(f"  appended {ROOT / 'benchmarks' / 'records' / 'runs.jsonl'}")
     return 0
 
 

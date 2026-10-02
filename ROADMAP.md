@@ -39,15 +39,15 @@ The same family is how the codon tutorial talks about hardware primitives: a **p
 - the unified selection rule: when two candidates share a niche, prefer the one **closer** to that reference direction;
 - variation by recombination and mutation.
 
-This repository today is a **weight-sweep archive**. `weights.simplex_weights` builds the directions. `WeightSweepLoop` runs each direction as its own annealed sampler under \(E_w=\sum_i w_i f_i\). `archive.Archive` keeps the union and drops dominated points. That matches the *intent* (several objectives, spread across preferences, search, then rank). It does not associate points to directions, does not prefer the closer member of a niche, and does not vary a population. `ThrmlIsingBackend` is the Extropic-shaped search step. `ExactEwMetropolisBackend` is a NumPy stand-in for the same outer loop when \(E_w\) is not an Ising energy ([docs/fidelity_hooks.md](docs/fidelity_hooks.md)).
+This repository is a **weight-sweep archive** with reference-direction niching on the pooled sample. `weights.simplex_weights` builds the directions. `WeightSweepLoop` runs each direction as its own annealed sampler under \(E_w=\sum_i w_i f_i\). `archive.Archive` keeps the union. `Archive.nondominated` is the non-dominated filter. `Archive.niche_survival` ideal–nadir normalizes those non-dominated rows, associates each to a sweep direction by perpendicular distance, and keeps the closer occupant of each direction. Dominated rows do not re-enter. The loop does not recombine or mutate a population. `ThrmlIsingBackend` and `ThrmlPottsBackend` are the Extropic-shaped search steps. `ExactEwMetropolisBackend` is a NumPy stand-in for the same outer loop when \(E_w\) is not an Ising or Potts energy ([docs/fidelity_hooks.md](docs/fidelity_hooks.md)).
 
 ## Current state vs target
 
-State was checked at `7946bc1` / v0.1.1. Phase 1 and phase 3 boxes below are checked against this tree (package 0.2.0). Phase 2 is still open.
+State was checked at `7946bc1` / v0.1.1, then updated as phases landed. Phase 1, phase 2, and phase 3 boxes below are checked against this tree (package 0.3.0).
 
 | Piece | Now | Target |
 |-------|-----|--------|
-| Outer loop | `WeightSweepLoop`: one independent anneal per weight, then an offline non-dominated archive | Same sampler contract, plus reference-direction association and closer-in-niche survival on the **pooled** candidates |
+| Outer loop | `WeightSweepLoop`: one independent anneal per weight (`sample_weight` only), then ideal–nadir association and closer-in-niche survival on the pooled non-dominated rows. `Archive.nondominated` remains beside that set | Same sampler contract, plus reference-direction association and closer-in-niche survival on the **pooled** candidates |
 | Directions | `simplex_weights`: uniform 2-objective grid; Das–Dennis for \(M>2\), with Dirichlet fill if the grid is short | Keep this generator as \(H\). Niching consumes it. Do not fork a second, undocumented direction set |
 | Ising search | `ThrmlIsingBackend` on THRML 0.1.4: `SpinNode`, `Block`, `IsingEBM`, `IsingSamplingProgram`, `SamplingSchedule`, `sample_states`, `hinton_init`. Even/odd blocks only. `SamplingSchedule` has no beta, so each temperature rebuilds `IsingEBM` | Remains the p-bit / Ising path. Coloring stays explicit. Same-parity edges stay rejected until a tested coloring exists |
 | In-repo problem | `CodonIsingProblem` (Ising chain) and `PottsChainProblem` (categorical chain). Neither is the codon walkthrough or a domain-wall encoding | Add a small Potts problem whose factors **are** the categorical energy. Leave the full spike-protein study in [extropic-ai/codon_opt](https://github.com/extropic-ai/codon_opt) |
@@ -108,24 +108,24 @@ Phases 1–3 are the algorithm. Phase 2 can start on NumPy archives before phase
 
 ### Phase 2 — Closer reference-direction niching
 
-**Outcome.** Survival on the pooled sample uses the U-NSGA-III niching rule: associate each point with a reference direction, and inside a niche prefer the point closer to that direction. Search stays annealed sampling. This is the gap between the weight-sweep archive and the algorithm named in the README.
+**Outcome.** Survival on the pooled sample uses the U-NSGA-III niching rule: associate each point with a reference direction, and inside a niche prefer the point closer to that direction. Search stays annealed sampling.
 
-**What changes.** `simplex_weights` already builds \(H\) directions. Today each direction only scalarizes its own run, and the archive then forgets which direction a point came from except for `weight_id`. Phase 2 normalizes the pooled objective rows, associates every row to a direction by perpendicular distance (the association Seada and Deb use), and applies niche survival:
+**What landed.** `simplex_weights` still builds \(H\) directions, and a caller-supplied matrix is used unchanged. Those vectors scalarize each anneal and are the reference rays for association. `Archive.niche_survival` drops dominated rows, ideal–nadir normalizes the remaining pooled rows (`normalize_objectives`: coordinate-wise min as ideal, max as nadir, constant objectives left unscaled), and associates each row by perpendicular distance. Niche survival then:
 
-- a non-dominated point that is the only occupant of a direction is kept in preference to a second point in an already occupied direction;
-- when two non-dominated points associate to the same direction, the one closer to the direction survives;
-- dominated points do not re-enter through niching.
+- keeps a non-dominated point that is the only occupant of a direction in preference to a second point in an already occupied direction;
+- when two non-dominated points associate to the same direction, keeps the one closer to the direction (quota 1);
+- does not let dominated points re-enter.
 
-The normalization (ideal / nadir or the equivalent actually coded) is written down next to the function and locked by a fixture. Multiple samples from one weight compete with samples from other weights. Niching is a function of the pooled `Archive`, not an inner operator of Metropolis or Gibbs.
+Multiple samples from one weight compete with samples from other weights. Niching is a function of the pooled `Archive`, not an inner operator of Metropolis or Gibbs. `LoopResult.nondominated_front` remains; `LoopResult.niche_front` is the additional survivor set.
 
 **Acceptance criteria.**
 
-- [ ] NumPy-only tests, no THRML. A hand-built 2-objective front where pure non-dominated filtering keeps a cluster on one direction, and niching also keeps a worse-scalarization point that is the nearest occupant of an empty direction.
-- [ ] A second fixture: two non-dominated points on one direction, the closer one kept, the farther one dropped when the niche quota is one.
-- [ ] `WeightSweepLoop` (or a successor with the same backend call) still obtains candidates only from `SamplingBackend.sample_weight`. No recombination, no mutation, no Bend types.
-- [ ] Directions passed in by the caller are the ones used for association. The loop does not secretly resample a new simplex.
-- [ ] The README algorithm-mapping row is updated in the same PR so "weight niches + offline ND" is not still described as the whole method after the behavior lands.
-- [ ] Existing archive tests still pass. The non-dominated filter remains available; niching is an additional survivor set, returned explicitly, so callers can see both.
+- [x] NumPy-only tests, no THRML. A hand-built 2-objective front where pure non-dominated filtering keeps a cluster on one direction, and niching also keeps a worse-scalarization point that is the nearest occupant of an empty direction.
+- [x] A second fixture: two non-dominated points on one direction, the closer one kept, the farther one dropped when the niche quota is one.
+- [x] `WeightSweepLoop` (or a successor with the same backend call) still obtains candidates only from `SamplingBackend.sample_weight`. No recombination, no mutation, no Bend types.
+- [x] Directions passed in by the caller are the ones used for association. The loop does not secretly resample a new simplex.
+- [x] The README algorithm-mapping row is updated in the same PR so "weight niches + offline ND" is not still described as the whole method after the behavior lands.
+- [x] Existing archive tests still pass. The non-dominated filter remains available; niching is an additional survivor set, returned explicitly, so callers can see both.
 
 ### Phase 3 — In-repo fidelity harness
 
@@ -196,7 +196,7 @@ Use this phrase only when every item below is true. It describes the **public so
 5. **Optional layers use their own names.** A Torx extra, once it meets phase 4, is "also runs an optional Torx circuit." It does not upgrade the sentence to "compiled onto thermodynamic hardware."
 6. **Absent public APIs stay absent.** As of 2026-10-02 the honest stack is THRML 0.1.4 plus, optionally, extro-torx 0.0.2. Thermalizers is [arXiv:2608.01615](https://arxiv.org/abs/2608.01615) only. Z1 is a published chip description, not a client library.
 
-Meeting items 1–4 on the current Ising path is already how this repo should describe **today's** THRML slice (`ThrmlIsingBackend` + `CodonIsingProblem`). The phrase for the **project** — categorical models included, niching included, fidelity measured in-repo — waits on phases 1–3. Phases 4–6 are not required for it.
+Meeting items 1–4 on the current Ising path is already how this repo should describe **today's** THRML slice (`ThrmlIsingBackend` + `CodonIsingProblem`). Phases 1–3 are in this tree: categorical Potts, closer-in-niche survival, and the in-repo fidelity harness. Torx, Thermalizers, and hardware stay outside that description (phases 4–6).
 
 ## Appendix: issues to file after merge
 

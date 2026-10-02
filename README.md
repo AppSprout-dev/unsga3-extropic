@@ -2,7 +2,7 @@
 
 Weight-sweep multiobjective search on **THRML** Ising and Potts models, plus a NumPy exact-\(E_w\) Metropolis fallback.
 
-The outer loop follows U-NSGA-III *intent*: several objectives, diverse niches, search, then ranking. Classical U-NSGA-III (population niching, variation operators) is not reimplemented here. The phased plan, drift guards, and definition of done are in [ROADMAP.md](ROADMAP.md).
+The outer loop samples one reference direction at a time, pools the candidates, and ranks them. Survival keeps the closer occupant of each direction: ideal–nadir normalization, then perpendicular distance. Candidates still come only from that sampling step. Recombination and mutation are not part of this package. The phased plan, drift guards, and definition of done are in [ROADMAP.md](ROADMAP.md).
 
 ## Extropic alignment
 
@@ -24,11 +24,12 @@ Source for the library: [extropic-ai/thrml](https://github.com/extropic-ai/thrml
 | U-NSGA-III intent | This package |
 |-------------------|--------------|
 | Vector fitness \(f_1,\ldots,f_M\) | Problem objectives |
-| Preference / niches | Weight sweep (`weights.simplex_weights` or a custom `w`) |
-| Variation / search | Annealed sampling under \(E_w=\sum_i w_i f_i\) |
-| Ranking / survival | Offline non-dominated archive (`archive.Archive`) |
+| Preference / niches | The sweep's weight vectors (`weights.simplex_weights` or a custom `w`). Those same vectors are the reference directions |
+| Variation / search | Annealed sampling under \(E_w=\sum_i w_i f_i\) via `sample_weight` only. No crossover or mutation |
+| Ranking | Non-dominated archive (`Archive.nondominated`) |
+| Niche survival | `Archive.niche_survival` / `LoopResult.niche_front`: pooled non-dominated rows are ideal–nadir normalized and associated to the sweep directions by perpendicular distance. Each direction keeps its closer occupant. A lone occupant of an empty direction is kept over a duplicate in a crowded direction. Dominated rows stay out. Both sets are returned |
 
-`WeightSweepLoop` runs each weight, samples, decodes objectives, and filters the non-dominated set. Closer-in-niche survival is not implemented yet.
+`WeightSweepLoop` runs each weight and samples. `nondominated_front` is the non-dominated archive. `niche_front` is the closer-in-niche survivor set on that archive. The directions used for association are the weights the loop just sampled; a caller-supplied matrix is not replaced by a new simplex draw.
 
 ## Layout
 
@@ -37,7 +38,7 @@ pyproject.toml
 README.md
 ROADMAP.md
 src/unsga3_extropic/
-  archive.py            # ND archive, 2-D hypervolume helper
+  archive.py            # ND archive, ideal–nadir niching, 2-D hypervolume helper
   fidelity.py           # generational distance, coverage, front loader
   results.py            # JSONL benchmark run records
   weights.py            # simplex / Das–Dennis directions
@@ -68,7 +69,7 @@ tests/
 | Benchmark JSONL records | implemented (`benchmarks/`) |
 | Domain-wall Ising | not implemented (issue #10) |
 | Thermalizers / Torx / hardware | not implemented |
-| Full classical U-NSGA-III niching | not implemented (weight niches + offline ND) |
+| Reference-direction niching | implemented (ideal–nadir normalization, perpendicular association, closer occupant). No crossover or mutation |
 | CI | GitHub Actions: `pytest -m 'not thrml'`, full unit tests, Ising smoke, Potts smoke |
 
 ## Install and test
