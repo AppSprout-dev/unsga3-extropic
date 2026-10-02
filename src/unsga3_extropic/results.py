@@ -274,8 +274,8 @@ def build_measured_record(
     np.savez_compressed(front_path, front=np.asarray(front, dtype=np.float64))
     seeds = [base_seed + _SEED_STRIDE * i for i in range(len(result.weights))]
     niche_note = (
-        f"Closer-in-niche survival kept {len(niche.objectives)} occupants "
-        f"across {len(result.weights)} directions (quota 1). "
+        f"Closer-in-niche survival kept {len(niche.objectives)} of {len(front)} "
+        f"non-dominated rows across {len(result.weights)} directions (quota 1). "
         "metrics.nd_count is the non-dominated archive."
     )
     record = {

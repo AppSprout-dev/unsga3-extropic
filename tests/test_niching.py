@@ -330,7 +330,7 @@ def test_measured_record_appends_the_niche_count(tmp_path):
         notes="pooled fixture",
     )
     assert record["metrics"]["nd_count"] == 4
-    assert "Closer-in-niche survival kept 3 occupants across 3 directions" in record["notes"]
+    assert "Closer-in-niche survival kept 3 of 4 non-dominated rows" in record["notes"]
     assert "metrics.nd_count is the non-dominated archive" in record["notes"]
 
 
