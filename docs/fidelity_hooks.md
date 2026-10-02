@@ -51,4 +51,4 @@ Bend, C#, and any ZDT1 harness live outside this repository. They are not import
 
 A THRML run of a non-factorized objective still needs an Ising or Potts expression of \(E_w\) first. This repo does not fit that surrogate. `ExactEwMetropolisBackend` remains the NumPy path for a general \(f\).
 
-Thermalizers and Torx are not wired up here.
+Thermalizers are not wired up here. The optional Torx circuit (`unsga3_extropic.torx_circuit`) samples a documented `PSWAP` and is not a search backend, so this harness does not score it.

@@ -30,3 +30,5 @@ python benchmarks/append_run.py --smoke --out benchmarks/records/runs.jsonl
 `--stub` writes a schema-valid row with null HV / GD / coverage and does not sample. `--smoke` runs the in-repo Potts chain (THRML, issue 4) and fills metrics with the harness from issue 6. Neither command searches for a beta schedule.
 
 `demos/run_codon_thrml.py` and `demos/run_potts_thrml.py` append the same kind of record under `demos/_out/` and to `benchmarks/records/runs.jsonl`. The codon line is issue `5` / phase `2`. The Potts line stays issue `4` / phase `1` and mentions the niche count in `notes`.
+
+The optional Torx smoke (`demos/run_torx_pswap.py`, issue 7) reports a PSWAP stay/swap rate. That rate is not a minimization front, so the demo does not append a line here. The `torx` pytest is the record of that rate.
