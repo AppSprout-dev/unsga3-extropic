@@ -1,0 +1,45 @@
+{
+  "profile": "deep",
+  "circuit": "TorxPswapCircuit",
+  "p_swap": 0.3,
+  "n_samples": 100000,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "initial_state": [
+    1,
+    0
+  ],
+  "abs_tolerance": 0.02,
+  "git_sha": "69f1cb7fc141d4e2c8fa4b502d3a1cf87354835d",
+  "date": "2026-10-02T18:14:26Z",
+  "draws": [
+    {
+      "seed": 0,
+      "stay_rate": 0.69975,
+      "swap_rate": 0.30025,
+      "abs_swap_error": 0.000250000000000028,
+      "elapsed_s": 1.193,
+      "within_bound": true
+    },
+    {
+      "seed": 1,
+      "stay_rate": 0.69953,
+      "swap_rate": 0.30047,
+      "abs_swap_error": 0.00047000000000002595,
+      "elapsed_s": 0.086,
+      "within_bound": true
+    },
+    {
+      "seed": 2,
+      "stay_rate": 0.69975,
+      "swap_rate": 0.30025,
+      "abs_swap_error": 0.000250000000000028,
+      "elapsed_s": 0.072,
+      "within_bound": true
+    }
+  ],
+  "notes": "profile=deep. Torx PSWAP stay/swap rate check. Not a minimization front, so it is not a row in runs.jsonl. Not a THRML program, not a Z1 run, and not Thermalizers."
+}

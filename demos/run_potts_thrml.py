@@ -6,6 +6,10 @@ From a checkout, after ``pip install -e ".[dev,cpu]"``::
     python demos/run_potts_thrml.py
     python demos/run_potts_thrml.py --smoke
 
+``--smoke`` is ``profile=smoke`` (CI). No flag is ``profile=default``
+(8-site chain). The multi-seed deep budget, on the 6-site smoke instance,
+is ``benchmarks/run_deep.py``.
+
 This is the in-repo unary-plus-pairwise chain, not the codon walkthrough
 and not a domain-wall Ising model.
 """

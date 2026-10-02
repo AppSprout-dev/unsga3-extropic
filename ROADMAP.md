@@ -58,7 +58,7 @@ State was checked at `7946bc1` / v0.1.1, then updated as phases landed. Phase 1,
 | Thermalizers | Not imported. No public library | Watch. Zero code until a public package and docs exist |
 | Hardware | Not imported. No device runner | After the algorithm phases, and only against a public device API. Z1 facts above are citations, not a backend |
 
-`CodonIsingProblem.enumerate_front` (exact front for \(n \le 16\)) and the CI smoke (`demos/run_codon_thrml.py --smoke`, THRML tests skipped when JAX/THRML are absent) are the regression floor. New phases keep that floor.
+`CodonIsingProblem.enumerate_front` (exact front for \(n \le 16\)) and the CI smoke (`demos/run_codon_thrml.py --smoke`, THRML tests skipped when JAX/THRML are absent) are the regression floor. New phases keep that floor. A larger multi-seed budget lives in `benchmarks/run_deep.py` and `.github/workflows/deep.yml` (`workflow_dispatch` only). Those rows are THRML simulations, plus a NumPy exact-\(E_w\) comparator. They are not Z1 measurements and they do not call Thermalizers.
 
 ## Drift guards / NON-goals
 

@@ -96,6 +96,8 @@ def test_potts_smoke_record_fills_metrics(tmp_path):
     assert record["problem"] == "potts_chain"
     assert record["backend"] == "thrml_potts"
     assert record["eval_budget"] == 2 * 2 * 4
+    assert record["notes"].startswith("profile=smoke.")
+    assert "schedule_product=16." in record["notes"]
     assert record["metrics"]["nd_count"] >= 1
     assert record["metrics"]["hypervolume_2d"] >= 0.0
     assert record["metrics"]["generational_distance"] >= 0.0
