@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "unsga3-extropic"
-version = "0.1.0"
-description = "U-NSGA-III on Extropic substrate (THRML / exact Ew Metropolis)"
+version = "0.1.1"
+description = "Weight-sweep multiobjective search on THRML Ising sampling, plus an exact E_w Metropolis fallback"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["matplotlib>=3.8", "pytest>=8.0"]
+cpu = ["jax[cpu]>=0.4.30"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/unsga3_extropic"]
@@ -29,3 +30,6 @@ sources = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+  "thrml: requires the thrml and jax packages",
+]

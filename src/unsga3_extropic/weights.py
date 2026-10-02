@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from math import comb
+
 import numpy as np
 
 
@@ -46,8 +48,6 @@ def simplex_weights(n_weights: int, n_obj: int = 2) -> np.ndarray:
 
 def _n_das_dennis(H: int, M: int) -> int:
     # number of points = C(H+M-1, M-1)
-    from math import comb
-
     return comb(H + M - 1, M - 1)
 
 

@@ -1,105 +1,92 @@
 # unsga3-extropic
 
-**Center:** the **U-NSGA-III** many-objective algorithm, mapped onto an Extropic-compatible substrate (THRML energy sampling / exact E_w Metropolis).
+Weight-sweep multiobjective search on a **THRML** Ising model, plus a NumPy exact-\(E_w\) Metropolis fallback.
 
-Bend and C# U-NSGA-III exist as **fidelity references** only. They do not own the idea. ZDT1 MH fidelity toys already live under `../toys/` — this package does not redo Bend.
+The outer loop follows U-NSGA-III *intent*: several objectives, diverse niches, search, then ranking. Classical U-NSGA-III (population niching, variation operators) is not reimplemented here.
 
-## Algorithm → Extropic mapping
+## Extropic alignment
+
+[THRML](https://docs.thrml.ai) is Extropic's JAX library for block Gibbs sampling of energy-based models — the same factor-graph structure their hardware is built to accelerate. This repository uses that library for Ising problems. It does not ship Thermalizers, Torx, or a hardware runner.
+
+| Piece | Role |
+|-------|------|
+| `ThrmlIsingBackend` | **THRML-native.** Block Gibbs on `IsingEBM` with the current public API: `SpinNode`, `Block`, `IsingEBM`, `IsingSamplingProgram`, `SamplingSchedule`, `sample_states`, `hinton_init`, and `jax.random.key`. Checked against THRML 0.1.4 and the [docs quickstart](https://docs.thrml.ai). Even/odd blocks match that two-color chain. Bool states follow THRML (`True → +1`, `False → -1`). Energy is \(\mathcal{E}(s)=-\beta(b\cdot s+\sum J_{ij}s_i s_j)\). `SamplingSchedule` has no beta; annealing rebuilds `IsingEBM` per temperature and carries the free-block state. |
+| `CodonIsingProblem` | **THRML-native energies** on a nearest-neighbor chain: a unary field and a pairwise term. Scalarization stays inside `IsingEBM`. This is a small in-repo problem. The codon-optimization walkthrough (Potts model and an equivalent Ising model) is the one linked from [docs.thrml.ai](https://docs.thrml.ai). |
+| `ExactEwMetropolisBackend` | **NumPy fallback.** Bit-flip Metropolis on exact \(E_w=w\cdot f(x)\) when \(f\) is not pairwise Ising. No THRML program and no Extropic device. |
+| Not in this repo | Thermalizers, Torx, Potts / `CategoricalNode` sampling, and device execution. |
+
+Source for the library: [extropic-ai/thrml](https://github.com/extropic-ai/thrml).
+
+## Algorithm mapping
 
 | U-NSGA-III intent | This package |
 |-------------------|--------------|
-| Vector fitness \(f_1,\ldots,f_M\) | Problem objectives (Ising terms or general `objective_fn`) |
-| Preference / niches | Weight / reference-direction sweep (`weights.simplex_weights`, custom `w`) |
+| Vector fitness \(f_1,\ldots,f_M\) | Problem objectives |
+| Preference / niches | Weight sweep (`weights.simplex_weights` or a custom `w`) |
 | Variation / search | Annealed sampling under \(E_w=\sum_i w_i f_i\) |
 | Ranking / survival | Offline non-dominated archive (`archive.Archive`) |
 
-Outer loop shape: **`WeightSweepLoop`** — for each weight vector, sample → decode objectives → accumulate → filter ND.
+`WeightSweepLoop` runs each weight, samples, decodes objectives, and filters the non-dominated set.
 
 ## Layout
 
 ```
-unsga3-extropic/
-  pyproject.toml          # depends on thrml; jax is peer
-  README.md
-  src/unsga3_extropic/
-    archive.py            # ND archive, HV-2D helper
-    weights.py            # simplex / Das–Dennis directions
-    loop.py               # WeightSweepLoop (U-NSGA-III-shaped)
-    backends/
-      thrml_ising.py      # REAL: THRML IsingEBM block Gibbs + anneal
-      ew_metropolis.py    # REAL: exact Ew Metropolis for general f
-    problems/
-      codon_ising.py      # REAL: THRML-native multi-term Ising (codon-style)
-  demos/run_codon_thrml.py
-  docs/fidelity_hooks.md  # pointers to ../toys ZDT1 MH / Bend-C# compare
-  tests/
+pyproject.toml
+README.md
+src/unsga3_extropic/
+  archive.py            # ND archive, 2-D hypervolume helper
+  weights.py            # simplex / Das–Dennis directions
+  loop.py               # WeightSweepLoop
+  backends/
+    thrml_ising.py      # THRML IsingEBM block Gibbs + anneal
+    ew_metropolis.py    # exact E_w Metropolis (NumPy)
+  problems/
+    codon_ising.py      # two-term Ising chain
+demos/run_codon_thrml.py
+docs/fidelity_hooks.md
+tests/
+.github/workflows/ci.yml
 ```
-
-### Stub vs real
 
 | Piece | Status |
 |-------|--------|
-| Package layout + `pyproject.toml` | **real** |
-| `WeightSweepLoop` / archive / weights | **real** |
-| `ThrmlIsingBackend` | **real** (THRML 0.1.4 API) |
-| `ExactEwMetropolisBackend` | **real** (NumPy MH; wire any `objective_fn`) |
-| `CodonIsingProblem` + demo | **real** THRML-native smoke |
-| Potts / `CategoricalNode` backend | **stub / not yet** (Ising path first; Potts via THRML categorical factors later) |
-| Full classical U-NSGA-III (NSGA-III niching inside population) | **not here** — thermo mapping uses weight niches + offline ND |
-| Bend / ZDT1 reimplementation | **out of scope** (see `docs/fidelity_hooks.md`) |
-| GitHub remote | **not created** — local scaffold; push instructions below |
+| `WeightSweepLoop`, archive, weights | implemented |
+| `ThrmlIsingBackend` | implemented (THRML 0.1.4 API) |
+| `ExactEwMetropolisBackend` | implemented (NumPy) |
+| `CodonIsingProblem` + demo | implemented, THRML Ising smoke |
+| Potts / `CategoricalNode` | not implemented |
+| Thermalizers / Torx / hardware | not implemented |
+| Full classical U-NSGA-III niching | not implemented (weight niches + offline ND) |
+| CI | GitHub Actions: unit tests + `demos/run_codon_thrml.py --smoke` |
 
-## Environment
+## Install and test
 
-Use the existing workspace venv (already has `thrml` + `jax`):
-
-```bash
-VENV=/workspace/extropic-first-job/.venv
-export PYTHONPATH=/workspace/extropic-first-job/unsga3-extropic/src
-
-# unit tests (no sampling)
-$VENV/bin/python -m pytest /workspace/extropic-first-job/unsga3-extropic/tests -q
-
-# THRML codon demo (smoke)
-$VENV/bin/python /workspace/extropic-first-job/unsga3-extropic/demos/run_codon_thrml.py
-```
-
-Optional editable install into that venv:
+Python 3.10+. THRML does not pin JAX; install a build for your platform. CPU:
 
 ```bash
-$VENV/bin/python -m pip install -e /workspace/extropic-first-job/unsga3-extropic
+pip install -e ".[dev,cpu]"
+pytest -q
+python demos/run_codon_thrml.py --smoke
 ```
 
-**Peer dependency:** install a JAX build that matches your platform (`jax` / `jax[cpu]` / CUDA). THRML does not pin JAX in its own deps.
+`pytest` skips tests marked `thrml` when JAX or THRML is missing (`pytest -m 'not thrml'` runs only the NumPy tests). CI installs `thrml` and `jax[cpu]` and runs the full suite plus the smoke demo.
+
+Default demo schedule (no `--smoke`):
+
+```bash
+python demos/run_codon_thrml.py
+```
 
 ## Backends
 
-### (a) THRML — Ising/Potts-expressible energies
+### THRML Ising
 
-`ThrmlIsingBackend`: problem supplies `build_ising(w) -> (biases, edges, J)` so \(E_w\) stays on the Ising substrate. Native path for codon-style multi-term energies.
+`ThrmlIsingBackend` asks the problem for `build_ising(w) -> (biases, edges, J)` so \(E_w\) stays on the Ising substrate. Edges must connect an even index to an odd index, because free blocks are `Block(nodes[::2])` and `Block(nodes[1::2])`. A path meets that rule. An edge inside one parity is rejected before sampling.
 
-### (b) Exact E_w Metropolis — general objectives
+### Exact \(E_w\) Metropolis
 
-`ExactEwMetropolisBackend`: bit-flip MH with exact \(E_w=w\cdot f(x)\). Use for nonlinear toys (ZDT1, etc.). Fidelity path against Bend/C# — see `docs/fidelity_hooks.md` and:
-
-- `/workspace/extropic-first-job/toys/zdt1_true_ew/`
-- `/workspace/extropic-first-job/toys/zdt1_thermo_unsga3.py`
-
-## Push to GitHub (optional)
-
-No remote was created from this scaffold. To publish under **AppSprout-dev**:
-
-```bash
-cd /workspace/extropic-first-job/unsga3-extropic
-git init
-git add .
-git commit -m "Scaffold unsga3-extropic: U-NSGA-III on THRML substrate"
-# create empty repo AppSprout-dev/unsga3-extropic on GitHub, then:
-git branch -M main
-git remote add origin git@github.com:AppSprout-dev/unsga3-extropic.git
-git push -u origin main
-```
+`ExactEwMetropolisBackend` evaluates \(E_w=w\cdot f(x)\) directly. Wire any `objective_fn`. See `docs/fidelity_hooks.md` for how that archive can be compared with an external classical reference.
 
 ## License
 
-Apache-2.0 (aligned with THRML / Extropic public stack).
+Apache-2.0 (aligned with the THRML / Extropic public stack).

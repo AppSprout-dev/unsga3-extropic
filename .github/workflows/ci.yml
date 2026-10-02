@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install THRML, JAX CPU, and this package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,cpu]"
+      - name: Unit tests
+        run: python -m pytest -q
+        env:
+          JAX_PLATFORMS: cpu
+      - name: Codon demo smoke
+        run: python demos/run_codon_thrml.py --smoke
+        env:
+          JAX_PLATFORMS: cpu
