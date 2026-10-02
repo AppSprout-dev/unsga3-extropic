@@ -1,8 +1,8 @@
-"""Exact E_w Metropolis–Hastings backend for general (non-Ising) objectives.
+"""Exact E_w Metropolis–Hastings backend for general objectives.
 
-Use when the scalarized energy is not pairwise-Ising expressible (e.g. ZDT1
-with sqrt terms). See ``docs/fidelity_hooks.md`` and
-``/workspace/extropic-first-job/toys/zdt1_true_ew/`` for the fidelity toy.
+Bit-flip Metropolis with exact ``E_w = w · f(x)``. NumPy only: this backend
+does not build a THRML program. Use it when the scalarized energy is not
+pairwise Ising. See ``docs/fidelity_hooks.md``.
 """
 
 from __future__ import annotations

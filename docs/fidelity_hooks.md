@@ -1,50 +1,25 @@
-# Fidelity hooks (Bend / C# / ZDT1 toys)
+# Fidelity hooks
 
-**Package center:** U-NSGA-III *algorithm intent* on Extropic substrate.  
-Bend and C# U-NSGA-III are **reference implementations** for numerical fidelity — they do not own the idea.
+This package centers a weight-sweep archive on two samplers:
 
-## Existing toys (do not reimplement here)
-
-| Path | What it is | Backend |
-|------|------------|---------|
-| `/workspace/extropic-first-job/toys/zdt1_thermo_unsga3.py` | ZDT1 binary toy; pairwise **Ising surrogate** of E_w via least-squares; THRML anneal; ND archive; vs tiny NSGA-II | `ThrmlIsingBackend`-like (surrogate) |
-| `/workspace/extropic-first-job/toys/zdt1_true_ew/` | ZDT1 with **exact** E_w = w·f; annealed Metropolis (no Ising surrogate) | matches `ExactEwMetropolisBackend` |
-| `/workspace/extropic-first-job/toys/REPORT.md` | Numbers / HV / GD for surrogate toy | — |
-| `/workspace/extropic-first-job/toys/zdt1_true_ew/REPORT.md` | Numbers for exact-Ew MH | — |
-
-Bend ZDT1 fidelity work (if any) is handled **elsewhere** — this package must not redo Bend.
-
-## How this package plugs in
+- `ThrmlIsingBackend` when every scalarized energy is pairwise Ising (see `CodonIsingProblem`).
+- `ExactEwMetropolisBackend` when the objective is a general function of the decision vector. That backend is NumPy Metropolis with exact \(E_w = w \cdot f(x)\). It does not call THRML.
 
 ```text
-U-NSGA-III intent
-    │
-    ├─ niches / diversity  →  WeightSweepLoop + simplex_weights / custom w
-    ├─ Ising/Potts-native  →  ThrmlIsingBackend  (+ problems/codon_ising)
-    └─ general objectives  →  ExactEwMetropolisBackend
-         └─ ZDT1 fidelity   →  wire objective_fn to toys' zdt1(); compare
-                               archive HV/GD to Bend/C# baselines offline
+weight niches          WeightSweepLoop + simplex_weights / custom w
+Ising-native search    ThrmlIsingBackend + problems/codon_ising.py
+general objectives     ExactEwMetropolisBackend
 ```
 
-### Suggested fidelity check (when Bend/C# artifacts exist)
+`demos/run_codon_thrml.py` checks the Ising path: both terms are exactly the THRML energy, so there is no surrogate between \(f\) and the sampler.
 
-1. Encode the same discrete decision space as the reference.
-2. Run `ExactEwMetropolisBackend` (honest E_w) with a comparable eval budget.
-3. Compare ND archive: hypervolume, generational distance, coverage.
-4. Optionally run a THRML surrogate path and document the surrogate gap (as the toys already do).
+## External classical references
 
-### Codon demo vs ZDT1
+Bend, C#, and any ZDT1 harness live outside this repository. They are not imported and not required for CI. When you have one:
 
-The in-package demo (`demos/run_codon_thrml.py`) is **THRML-native**: energies are exactly Ising, so there is no surrogate gap. It validates the outer loop + THRML backend, not ZDT1 fidelity.
+1. Encode the same discrete decisions.
+2. Run `ExactEwMetropolisBackend` with a comparable evaluation budget.
+3. Compare the non-dominated archive (hypervolume, generational distance, coverage) offline.
+4. A THRML run of a non-Ising objective needs an Ising (or Potts) expression of \(E_w\) first. This repo does not fit that surrogate.
 
-## Reproduce toys (workspace venv)
-
-```bash
-VENV=/workspace/extropic-first-job/.venv/bin/python
-
-# Ising-surrogate ZDT1
-$VENV /workspace/extropic-first-job/toys/zdt1_thermo_unsga3.py
-
-# Exact Ew MH ZDT1
-$VENV /workspace/extropic-first-job/toys/zdt1_true_ew/zdt1_true_ew.py
-```
+Potts / `CategoricalNode`, Thermalizers, and Torx are not wired up here. THRML's own codon-optimization walkthrough is documented at [docs.thrml.ai](https://docs.thrml.ai).

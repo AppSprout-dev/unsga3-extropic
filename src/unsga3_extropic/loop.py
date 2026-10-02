@@ -51,7 +51,8 @@ class LoopResult:
             ref = (float(f[:, 0].max() + 0.1 * abs(f[:, 0].max() or 1)),
                    float(f[:, 1].max() + 0.1 * abs(f[:, 1].max() or 1)))
             out["hv_2d_data_ref"] = hypervolume_2d(f, ref=ref)
-            out["hv_ref"] = ref
+            # list so LoopResult.summary() is json.dumps-safe
+            out["hv_ref"] = [ref[0], ref[1]]
         return out
 
 

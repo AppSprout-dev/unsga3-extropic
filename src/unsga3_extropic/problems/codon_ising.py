@@ -1,19 +1,24 @@
-"""THRML-native multi-term Ising problem (codon-style, not ZDT1).
+"""Two-term Ising chain sampled with THRML (codon-style energies).
 
 Two competing Ising-expressible energies over a spin chain:
 
-  E_codon  = - sum_i h_i s_i          # preferred "codon" (unary biases)
-  E_struct = - J sum_<i,j> s_i s_j    # ferromagnetic "structure" couplings
+  E_codon  = - sum_i h_i s_i          # unary "codon" fields
+  E_struct = - J sum_<i,j> s_i s_j    # nearest-neighbor "structure"
 
-Scalarization E_w = w0 * E_codon + w1 * E_struct remains Ising:
-  biases  = w0 * h
-  J_edges = w1 * J   (nearest-neighbor)
+Scalarization E_w = w0 * E_codon + w1 * E_struct stays inside ``IsingEBM``
+(https://docs.thrml.ai)::
 
-Objectives reported for the archive are the raw energy terms
-(f0, f1) = (E_codon, E_struct) — minimization. Soft global (host-adaptive
-bias) can be folded into h via ``global_bias``.
+  E(s) = -beta * (b · s + sum J_ij s_i s_j)
+  biases = w0 * h
+  J_edges = w1 * J
 
-This is the Extropic-native path: no surrogate fit, exact THRML energy.
+Objectives stored in the archive are the raw terms
+``(f0, f1) = (E_codon, E_struct)`` (minimization). ``global_bias`` is added
+into ``h``.
+
+This exercises the THRML Ising path in-process. It is a small chain, separate
+from the codon-optimization walkthrough linked from docs.thrml.ai (Potts model
+and an equivalent Ising model).
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from unsga3_extropic.archive import nondominated_mask
 from unsga3_extropic.backends.thrml_ising import ThrmlIsingBackend
 
 
@@ -86,7 +92,20 @@ class CodonIsingProblem:
         bits = ((k >> shifts) & 1).astype(np.float64)
         spins = 2.0 * bits - 1.0
         objs = self.energies_from_spins(spins)
-        from unsga3_extropic.archive import nondominated_mask, unique_rows
-
         mask = nondominated_mask(objs)
-        return bits[mask], unique_rows(objs[mask])
+        bits_nd = bits[mask]
+        objs_nd = objs[mask]
+        # One decision per unique objective, same rounding as Archive.
+        kept_bits: list[np.ndarray] = []
+        kept_objs: list[np.ndarray] = []
+        seen: set[tuple[float, ...]] = set()
+        for bit_row, obj_row in zip(bits_nd, objs_nd):
+            key = tuple(np.round(obj_row, 6).tolist())
+            if key in seen:
+                continue
+            seen.add(key)
+            kept_bits.append(bit_row)
+            kept_objs.append(obj_row)
+        if not kept_objs:
+            return bits_nd[:0], objs_nd[:0]
+        return np.stack(kept_bits, axis=0), np.stack(kept_objs, axis=0)
