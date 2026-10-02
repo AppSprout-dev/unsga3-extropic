@@ -4,7 +4,8 @@ This package centers a weight-sweep archive on three samplers:
 
 - `ThrmlIsingBackend` when every scalarized energy is pairwise Ising (`CodonIsingProblem`).
 - `ThrmlPottsBackend` when every scalarized energy is a categorical Potts factor model (`PottsChainProblem`: one unary term and one nearest-neighbor term on a chain). THRML-native. States are integers in `[0, K)`, and `K` is `CategoricalGibbsConditional.n_categories`.
-- `ExactEwMetropolisBackend` when the objective is a general function of the decision vector. That backend is NumPy Metropolis with exact \(E_w = w \cdot f(x)\). It does not call THRML.
+- `ExactEwMetropolisBackend` when the objective is a general function of a bitstring. That backend is NumPy bit-flip Metropolis with exact \(E_w = w \cdot f(x)\). It does not call THRML.
+- `ExactEwContinuousBackend` when the objective is a general function on a box (continuous ZDT1, ZDT2, DTLZ2). Same exact scalarization, NumPy only, truncated-normal steps of scale 0.1. Those problems are not Ising energies, and this package does not fit a surrogate into `IsingEBM`.
 
 ```text
 weight niches          WeightSweepLoop + simplex_weights / custom w
@@ -12,7 +13,7 @@ niche survival         Archive.niche_survival (ideal–nadir, perpendicular dist
 Ising-native search    ThrmlIsingBackend + problems/codon_ising.py
 Potts-native search    ThrmlPottsBackend + problems/potts_chain.py
 Potts p-bit image      ThrmlDomainWallBackend (THRML simulation, not a device)
-general objectives     ExactEwMetropolisBackend
+general objectives     ExactEwMetropolisBackend (bits) or ExactEwContinuousBackend (box)
 front comparison       fidelity.py (hypervolume_2d, generational distance, coverage)
 ```
 
@@ -50,6 +51,8 @@ Bend, C#, and any ZDT1 harness live outside this repository. They are not import
 2. Load it with `load_front`. Score it against an in-repo front (`enumerate_front` for the Ising or Potts chain at a size the enumerator allows, or a `LoopResult` non-dominated front) using `compare_fronts`.
 3. Do not retune betas inside this repo to match that file.
 
-A THRML run of a non-factorized objective still needs an Ising or Potts expression of \(E_w\) first. This repo does not fit that surrogate. `ExactEwMetropolisBackend` remains the NumPy path for a general \(f\).
+A THRML run of a non-factorized objective still needs an Ising or Potts expression of \(E_w\) first. This repo does not fit that surrogate. `ExactEwMetropolisBackend` remains the NumPy path for a general bitstring \(f\). `ExactEwContinuousBackend` is the NumPy path for a general box \(f\).
+
+`fidelity.py` still does not start Bend, C#, or pymoo. The optional benchmark script `benchmarks/run_oracle_continuous.py` is separate from that harness. It shells out to `unsga3-bend/ab/igd_vs_pymoo.py` when that file is on disk, and it records only the printed `igd=` line. CI does not run it and does not install pymoo. The reference front for that script is the analytic 500-point ZDT curve, or the 91-point Das–Dennis DTLZ2 sphere at partitions 12. A missing script is an error, not a made-up IGD.
 
 Thermalizers are not wired up here. The optional Torx circuit (`unsga3_extropic.torx_circuit`) samples a documented `PSWAP` and is not a search backend, so this harness does not score it.

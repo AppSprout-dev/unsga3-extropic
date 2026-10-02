@@ -1,0 +1,6 @@
+igd=3.137348744717338
+problem=zdt2
+front_rows=10
+pf_rows=500
+pf_source=analytic-zdt2 n=500
+front=/workspace/benchmarks/records/oracle_fronts/zdt2_seed06.csv

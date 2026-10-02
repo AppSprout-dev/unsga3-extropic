@@ -58,3 +58,14 @@ Each seed is a new process. JAX keeps compiled programs for the life of the proc
 `benchmarks/DEEP_RESULTS.md` is rewritten from that invocation. Search rows append to `records/runs.jsonl`. The Torx deep check (100,000 samples, three seeds, same `p = 0.3` as the docs quickstart) is a stay/swap rate in `records/torx_pswap_deep.json`. It is not a front, so it is not a JSONL row. `.github/workflows/deep.yml` runs the full command on `workflow_dispatch` and uploads the files. It does not commit them.
 
 Deep rows are THRML simulations, plus a NumPy `exact_ew` bit-flip Metropolis run on the codon chain. They are not Z1 measurements and they do not call Thermalizers.
+
+## Continuous oracle (NumPy ExactEw)
+
+`benchmarks/run_oracle_continuous.py` is a different profile, `profile=oracle-continuous`, backend `exact_ew_continuous`. Problems are continuous ZDT1 `n=30`, ZDT2 `n=30`, and DTLZ2 `M=3` `k=10` (`n=12`), seeds 1–15. It is not THRML. Objective calls track the Bend ORACLE-MULTISEED budgets (ZDT1 `52*100=5200`, ZDT2 `52*250=13000`, DTLZ2 `92*150=13800`, of which DTLZ2 spends 13741 because 91 Das–Dennis directions do not divide 13800). `eval_budget` remains the recorded-sample count.
+
+IGD in `benchmarks/ORACLE_RESULTS.md` is the `igd=` line from `unsga3-bend/ab/igd_vs_pymoo.py` (analytic PF 500 points; DTLZ2 Das–Dennis partitions 12, 91 points). The script does not invent that number. Bend and C# cells in the table are the published ORACLE-MULTISEED strings. Non-dominated objective CSVs live in `benchmarks/records/oracle_fronts/`. CI does not run this command.
+
+```bash
+export UNSGA3_BEND_ROOT=/path/to/unsga3-bend   # optional; /workspace/unsga3-bend is also checked
+python benchmarks/run_oracle_continuous.py
+```

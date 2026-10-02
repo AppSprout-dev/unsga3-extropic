@@ -16,6 +16,7 @@ The outer loop samples one reference direction at a time, pools the candidates, 
 | `PottsChainProblem` | **THRML-native energies** on a short categorical chain: one unary cost and one nearest-neighbor Potts cost. Those two costs are the archived objectives, and \(w\cdot f\) is the `FactorizedEBM` energy. Not the codon walkthrough. |
 | `ThrmlDomainWallBackend` | **THRML simulation of the p-bit image** of `PottsChainProblem`. Domain-wall (thermometer) encoding from [example 03](https://docs.thrml.ai/en/latest/03_codon_optimization.html): \(K\) categories become \(K-1\) spins, Potts weights become Ising biases and couplings by the documented first and second differences, and a ferromagnetic penalty \(P\) prices broken thermometers. A \(K=2\) chain is 2-colored and is sampled with `ThrmlIsingBackend`. A \(K\ge 3\) chain is not; it uses `SpinEBMFactor`, `SpinGibbsConditional`, and `FactorSamplingProgram` with the example's `(site parity, spin-index parity)` blocks. Decoded categorical states are the archived objectives. Patterns that are not thermometers are counted and left out of that archive. This is not a Z1 run and not a copy of [codon_opt](https://github.com/extropic-ai/codon_opt). |
 | `ExactEwMetropolisBackend` | **NumPy fallback.** Bit-flip Metropolis on exact \(E_w=w\cdot f(x)\) when \(f\) is not an Ising or Potts factor energy. No THRML program and no Extropic device. |
+| `ExactEwContinuousBackend` | **NumPy, not THRML.** One-coordinate truncated-normal Metropolis on a box (`step_scale=0.1`), same exact \(E_w\). Used for continuous ZDT1, ZDT2, and DTLZ2, which are not Ising energies. No surrogate is fit into `IsingEBM`. |
 | `TorxPswapCircuit` | **Torx, optional, default off.** Two-pbit `PSWAP` on `DiscretePCircuit`, sampled with `BranchingSimulator`, as in the [Torx quickstart](https://docs.torx.ai/en/latest/) (`extro-torx` 0.0.2, Python ≥ 3.11). `theta` is the logit of the swap probability. Not a `SamplingBackend`, not a THRML program, and not a hardware runner. |
 | Not in this repo | Thermalizers and device execution. The domain-wall path above is a THRML simulation of the in-repo Potts chain. |
 
@@ -50,12 +51,13 @@ src/unsga3_extropic/
     thrml_ising.py      # THRML IsingEBM block Gibbs + anneal
     thrml_potts.py      # THRML CategoricalEBMFactor block Gibbs + weight rescale
     thrml_domain_wall.py # Potts chain as domain-wall Ising (THRML simulation)
-    ew_metropolis.py    # exact E_w Metropolis (NumPy)
+    ew_metropolis.py    # exact E_w Metropolis (NumPy bit-flip and continuous box)
   domain_wall.py        # thermometer compile / decode (no JAX)
   torx_circuit.py       # optional Torx PSWAP circuit (not the search loop)
   problems/
     codon_ising.py      # two-term Ising chain
     potts_chain.py      # two-term Potts chain
+    continuous.py       # ZDT1, ZDT2, DTLZ2 (NumPy ExactEw, not THRML)
 benchmarks/             # run-record schema, smoke append CLI, deep runner
 demos/run_codon_thrml.py
 demos/run_potts_thrml.py
@@ -72,7 +74,8 @@ tests/
 | `ThrmlIsingBackend` | implemented (THRML 0.1.4 API) |
 | `ThrmlPottsBackend` + `PottsChainProblem` | implemented (THRML 0.1.4 categorical API) |
 | Domain-wall Ising image of that Potts chain | THRML simulation (`ThrmlDomainWallBackend`, issue #10). Not Z1, not `codon_opt` |
-| `ExactEwMetropolisBackend` | implemented (NumPy, not THRML) |
+| `ExactEwMetropolisBackend` | implemented (NumPy bit-flip, not THRML) |
+| `ExactEwContinuousBackend` + ZDT1/ZDT2/DTLZ2 | implemented (NumPy box Metropolis, not THRML). Yardstick table: `benchmarks/ORACLE_RESULTS.md` |
 | `CodonIsingProblem` + demo | implemented, THRML Ising smoke |
 | Front harness (HV, GD, coverage, `.npy`/`.npz`) | implemented |
 | Benchmark JSONL records | implemented (`benchmarks/`). `profile=smoke` and `profile=default` are the demos. `profile=deep` is `benchmarks/run_deep.py` |
@@ -147,7 +150,9 @@ Pass an explicit `coloring` (a partition of the sites into independent sets), or
 
 ### Exact \(E_w\) Metropolis
 
-`ExactEwMetropolisBackend` evaluates \(E_w=w\cdot f(x)\) directly in NumPy. Wire any `objective_fn`. See `docs/fidelity_hooks.md` for how that archive, or a THRML front, can be compared with an external classical reference. The comparison functions do not call Bend or C#.
+`ExactEwMetropolisBackend` evaluates \(E_w=w\cdot f(x)\) directly in NumPy on bitstrings. `ExactEwContinuousBackend` does the same on a box: each proposal adds `Normal(0, 0.1)` to one coordinate and keeps the draw only if it stays inside, with the truncated-normal Hastings correction. Wire any `objective_fn`. Continuous ZDT1 (`n=30`), ZDT2 (`n=30`), and DTLZ2 (`M=3`, `k=10`) use the continuous backend because those objectives are not Ising or Potts factor energies. The run is labeled NumPy ExactEw. It is not THRML-native.
+
+`benchmarks/run_oracle_continuous.py` spends a `pop * gens` objective-call budget from the Bend ORACLE-MULTISEED protocol (ZDT1 52/100, ZDT2 52/250, DTLZ2 92/150, seeds 1–15, partitions 12) and writes the non-dominated archive as CSV. IGD is the `igd=` line from an external `unsga3-bend/ab/igd_vs_pymoo.py` (analytic PF, 500 points; DTLZ2 Das–Dennis, 91 points). `fidelity.py` does not call that script. See `docs/fidelity_hooks.md`.
 
 ### Torx PSWAP (optional)
 

@@ -18,7 +18,7 @@ from unsga3_extropic.archive import Archive, NicheResult, nondominated_mask, uni
 from unsga3_extropic.loop import AnnealConfig, LoopResult, WeightSweepLoop
 from unsga3_extropic.weights import simplex_weights
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     "Archive",

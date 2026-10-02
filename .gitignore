@@ -9,4 +9,6 @@ build/
 demos/_out/
 benchmarks/**/artifacts/
 *.npy
+# Sibling checkout used only to score fronts. Not part of this package.
+unsga3-bend/
 .DS_Store
