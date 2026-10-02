@@ -2,7 +2,7 @@
 
 Weight-sweep multiobjective search on a **THRML** Ising model, plus a NumPy exact-\(E_w\) Metropolis fallback.
 
-The outer loop follows U-NSGA-III *intent*: several objectives, diverse niches, search, then ranking. Classical U-NSGA-III (population niching, variation operators) is not reimplemented here.
+The outer loop follows U-NSGA-III *intent*: several objectives, diverse niches, search, then ranking. Classical U-NSGA-III (population niching, variation operators) is not reimplemented here. The phased plan, drift guards, and definition of done are in [ROADMAP.md](ROADMAP.md).
 
 ## Extropic alignment
 
@@ -33,6 +33,7 @@ Source for the library: [extropic-ai/thrml](https://github.com/extropic-ai/thrml
 ```
 pyproject.toml
 README.md
+ROADMAP.md
 src/unsga3_extropic/
   archive.py            # ND archive, 2-D hypervolume helper
   weights.py            # simplex / Das–Dennis directions
