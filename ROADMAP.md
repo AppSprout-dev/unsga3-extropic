@@ -43,7 +43,7 @@ This repository is a **weight-sweep archive** with reference-direction niching o
 
 ## Current state vs target
 
-State was checked at `7946bc1` / v0.1.1, then updated as phases landed. Phase 1, phase 2, and phase 3 boxes below are checked against this tree (package 0.3.0).
+State was checked at `7946bc1` / v0.1.1, then updated as phases landed. Phase 1, phase 2, phase 3, and phase 4 boxes below are checked against this tree (package 0.4.0).
 
 | Piece | Now | Target |
 |-------|-----|--------|
@@ -54,7 +54,7 @@ State was checked at `7946bc1` / v0.1.1, then updated as phases landed. Phase 1,
 | Categorical / Potts | `ThrmlPottsBackend` + `PottsChainProblem`: public `CategoricalNode`, `CategoricalEBMFactor`, `CategoricalGibbsConditional`, `FactorSamplingProgram`, `FactorizedEBM`. Even/odd coloring. Anneal rescales weights. Domain-wall Ising is not in this tree | `CategoricalNode` + `CategoricalEBMFactor` + `CategoricalGibbsConditional` on a 2-colored chain, public API only |
 | General objectives | `ExactEwMetropolisBackend`: bit-flip Metropolis on exact \(E_w=w\cdot f(x)\). NumPy. No THRML program | Stays the non-ecosystem fallback and a fidelity workhorse. A THRML label requires an EBM whose energy matches \(f\) |
 | Fidelity | `fidelity.py`: `hypervolume_2d`, generational distance, coverage, `.npy`/`.npz` loader. Bend, C#, and ZDT1 stay out of tree. Run records live under `benchmarks/` | An in-repo harness (hypervolume, generational distance, coverage) over array fronts. External oracles remain data files |
-| Torx | Not imported | Optional extra only, default off, Python ≥ 3.11, package `extro-torx` |
+| Torx | Optional extra `torx` (`extro-torx` 0.0.2, Python ≥ 3.11): `TorxPswapCircuit` samples the docs quickstart (`DiscretePCircuit`, `PSWAP`, `BranchingSimulator`). Default off. Not a search backend and not a THRML program | Optional extra only, default off, Python ≥ 3.11, package `extro-torx` |
 | Thermalizers | Not imported. No public library | Watch. Zero code until a public package and docs exist |
 | Hardware | Not imported. No device runner | After the algorithm phases, and only against a public device API. Z1 facts above are citations, not a backend |
 
@@ -66,9 +66,9 @@ These are permanent, including inside a phase that sounds adjacent.
 
 1. **Algorithm first.** The product is multiobjective search whose variation step is sampling under a scalarized energy. A language port of a classical generational GA is not a phase.
 2. **Bend and C# are fidelity references only.** They are not imported, not vendored, not built in CI, and not the spec. A front they emit may be checked in later as numbers. Their operators (SBX, polynomial mutation, generational survivor loops) are not ported into `WeightSweepLoop`.
-3. **Do not claim a library the import graph does not import.** Today the Extropic import is THRML. `ExactEwMetropolisBackend` stays described as NumPy.
+3. **Do not claim a library the import graph does not import.** The core search import is THRML. `ExactEwMetropolisBackend` stays described as NumPy. Torx is imported only inside `TorxPswapCircuit.sample`, and only when the `torx` extra is installed.
 4. **Do not invent a Thermalizers API.** No module, class, or function is added because the paper sketches a compiler. No pseudocode from arXiv:2608.01615 is transcribed into `src/`. Context matching and trajectory-level REINFORCE are not implemented from the paper.
-5. **Do not call Torx a compiler onto THRML.** A future optional Torx path is a stochastic-circuit sampler. It is not Thermalizers and not a TSU.
+5. **Do not call Torx a compiler onto THRML.** The optional Torx path is a stochastic-circuit sampler (`TorxPswapCircuit`). It is not Thermalizers and not a TSU.
 6. **Do not treat `CodonIsingProblem` as example 03.** The docs codon model is a \(K\)-state Potts model and, separately, a domain-wall Ising model ([example 03](https://docs.thrml.ai/en/latest/03_codon_optimization.html)). This repo's chain is a two-term Ising smoke. Renaming it does not make it that tutorial.
 7. **Energy identity.** A backend marked THRML-native samples an EBM whose energy is the scalarization of the archived objectives. Host-side \(E_w=w\cdot f(x)\) for a non-factorized \(f\) stays on `ExactEwMetropolisBackend`. No learned surrogate is introduced to force a non-Ising \(f\) into `IsingEBM`.
 8. **Coloring is part of the sampler.** Even/odd blocks are valid for a path. They are not a general graph colorer. An edge inside one block is a bug, not a silent recolor.
@@ -145,15 +145,15 @@ Multiple samples from one weight compete with samples from other weights. Nichin
 
 **Outcome.** A default-off extra that can draw pbit samples from public Torx, labeled as Torx. Core install stays Python ≥ 3.10 and does not import `torx`.
 
-Torx on this check is `extro-torx` 0.0.2, Python ≥ 3.11 ([getting started](https://docs.torx.ai/en/latest/getting-started.html), [PyPI](https://pypi.org/project/extro-torx/)). The public quickstart constructs a `DiscretePCircuit`, holds parameters separately, and samples with `BranchingSimulator` ([docs home](https://docs.torx.ai/en/latest/)). Directed factor graphs are a different public entry ([example 15 / factors](https://docs.torx.ai/en/latest/15_intro_to_factors.html), [example 16](https://docs.torx.ai/en/latest/16_gibbs_sampling_factor_graph.html)). Pick one documented entry point and name it in the module docstring. Do not wrap it in a fictional compiler.
+Torx on this check is `extro-torx` 0.0.2, Python ≥ 3.11 ([getting started](https://docs.torx.ai/en/latest/getting-started.html), [PyPI](https://pypi.org/project/extro-torx/)). Re-checked 2026-10-02: that version and the quickstart are unchanged. The public quickstart constructs a `DiscretePCircuit`, holds parameters separately, and samples with `BranchingSimulator` ([docs home](https://docs.torx.ai/en/latest/)). This tree uses that entry point (`TorxPswapCircuit`). Directed factor graphs are a different public entry ([example 15 / factors](https://docs.torx.ai/en/latest/15_intro_to_factors.html), [example 16](https://docs.torx.ai/en/latest/16_gibbs_sampling_factor_graph.html)) and are not wrapped here.
 
 **Acceptance criteria.**
 
-- [ ] Dependency lives in an optional extra (for example `torx`). `pip install -e .` on Python 3.10 still imports `unsga3_extropic` and runs `pytest -m 'not thrml'`.
-- [ ] The Torx import sits inside the optional backend, same pattern as the JAX import in `ThrmlIsingBackend`, so a missing `torx` package skips rather than breaks collection of the NumPy tests.
-- [ ] One smoke: build a two-site circuit from a documented gate (`PSWAP` or `PNOT` / `PCNOT` as in the Torx README), sample, and check the empirical stay/swap or bit-flip rate against the gate parameter within a loose tolerance at a documented sample count.
-- [ ] README calls this path Torx, not THRML, not Thermalizers, and not hardware.
-- [ ] No code path turns a Torx circuit into an `IsingEBM` or a `CategoricalEBMFactor`. That mapping is Thermalizers' unpublished job.
+- [x] Dependency lives in an optional extra (for example `torx`). `pip install -e .` on Python 3.10 still imports `unsga3_extropic` and runs `pytest -m 'not thrml'`.
+- [x] The Torx import sits inside the optional backend, same pattern as the JAX import in `ThrmlIsingBackend`, so a missing `torx` package skips rather than breaks collection of the NumPy tests.
+- [x] One smoke: build a two-site circuit from a documented gate (`PSWAP` or `PNOT` / `PCNOT` as in the Torx README), sample, and check the empirical stay/swap or bit-flip rate against the gate parameter within a loose tolerance at a documented sample count.
+- [x] README calls this path Torx, not THRML, not Thermalizers, and not hardware.
+- [x] No code path turns a Torx circuit into an `IsingEBM` or a `CategoricalEBMFactor`. That mapping is Thermalizers' unpublished job.
 
 ### Phase 5 — Thermalizers watch
 
@@ -239,11 +239,11 @@ Phase 3. Filed as issue #6. Acceptance criteria (checked in the phase 3 section 
 
 **4. Optional `extro-torx` extra, default off**
 
-Phase 4. Acceptance criteria:
+Phase 4. Filed as issue #7. Acceptance criteria (checked in the phase 4 section above):
 
-- Extra dependency, Python ≥ 3.11 for that extra only. Core stays importable on 3.10 without `torx`.
-- One documented circuit (`DiscretePCircuit` + a documented simulator, or a documented DFG) with a statistical smoke test that skips if `extro-torx` is absent.
-- Docs call it Torx. No THRML lowering and no Thermalizers naming. Spec: [docs.torx.ai](https://docs.torx.ai/en/latest/).
+- [x] Extra dependency, Python ≥ 3.11 for that extra only. Core stays importable on 3.10 without `torx`.
+- [x] One documented circuit (`DiscretePCircuit` + a documented simulator, or a documented DFG) with a statistical smoke test that skips if `extro-torx` is absent.
+- [x] Docs call it Torx. No THRML lowering and no Thermalizers naming. Spec: [docs.torx.ai](https://docs.torx.ai/en/latest/).
 
 **5. Watch for a public Thermalizers release**
 

@@ -1,12 +1,12 @@
 # unsga3-extropic
 
-Weight-sweep multiobjective search on **THRML** Ising and Potts models, plus a NumPy exact-\(E_w\) Metropolis fallback.
+Weight-sweep multiobjective search on **THRML** Ising and Potts models, plus a NumPy exact-\(E_w\) Metropolis fallback. An optional extra also runs one Torx circuit. That circuit is not the search step.
 
 The outer loop samples one reference direction at a time, pools the candidates, and ranks them. Survival keeps the closer occupant of each direction: ideal–nadir normalization, then perpendicular distance. Candidates still come only from that sampling step. Recombination and mutation are not part of this package. The phased plan, drift guards, and definition of done are in [ROADMAP.md](ROADMAP.md).
 
 ## Extropic alignment
 
-[THRML](https://docs.thrml.ai) is Extropic's JAX library for block Gibbs sampling of energy-based models — the same factor-graph structure their hardware is built to accelerate. This repository uses that library for Ising problems and for a categorical Potts chain. It does not ship Thermalizers, Torx, or a hardware runner.
+[THRML](https://docs.thrml.ai) is Extropic's JAX library for block Gibbs sampling of energy-based models — the same factor-graph structure their hardware is built to accelerate. This repository uses that library for Ising problems and for a categorical Potts chain. It also runs an optional Torx circuit when the `torx` extra is installed. That circuit is not the search step and is not a hardware runner. This repository does not ship Thermalizers.
 
 | Piece | Role |
 |-------|------|
@@ -15,7 +15,8 @@ The outer loop samples one reference direction at a time, pools the candidates, 
 | `ThrmlPottsBackend` | **THRML-native.** Block Gibbs on `CategoricalNode` with `CategoricalEBMFactor`, `CategoricalGibbsConditional`, `FactorSamplingProgram`, `FactorizedEBM`, `BlockGibbsSpec`, `SamplingSchedule`, and `sample_states` ([example 00](https://docs.thrml.ai/en/latest/00_probabilistic_computing.html), [discrete EBM](https://docs.thrml.ai/en/latest/api-discrete-ebm.html), [EBM](https://docs.thrml.ai/en/latest/api-ebm.html)). Checked against THRML 0.1.4. `CategoricalNode()` takes no \(K\); \(K\) is `CategoricalGibbsConditional(n_categories)`. States are integers in \([0, K)\). Factor energy is \(-\sum W[\mathrm{state}]\). `SamplingSchedule` has no beta; annealing rescales factor weights (example 03) and carries the free-block state. Free blocks are an explicit coloring (default even/odd). An edge inside one block is rejected before sampling. |
 | `PottsChainProblem` | **THRML-native energies** on a short categorical chain: one unary cost and one nearest-neighbor Potts cost. Those two costs are the archived objectives, and \(w\cdot f\) is the `FactorizedEBM` energy. Not the codon walkthrough, and not a domain-wall Ising model ([issue #10](https://github.com/AppSprout-dev/unsga3-extropic/issues/10)). |
 | `ExactEwMetropolisBackend` | **NumPy fallback.** Bit-flip Metropolis on exact \(E_w=w\cdot f(x)\) when \(f\) is not an Ising or Potts factor energy. No THRML program and no Extropic device. |
-| Not in this repo | Thermalizers, Torx, domain-wall Ising, and device execution. |
+| `TorxPswapCircuit` | **Torx, optional, default off.** Two-pbit `PSWAP` on `DiscretePCircuit`, sampled with `BranchingSimulator`, as in the [Torx quickstart](https://docs.torx.ai/en/latest/) (`extro-torx` 0.0.2, Python ≥ 3.11). `theta` is the logit of the swap probability. Not a `SamplingBackend`, not a THRML program, and not a hardware runner. |
+| Not in this repo | Thermalizers, domain-wall Ising, and device execution. |
 
 Source for the library: [extropic-ai/thrml](https://github.com/extropic-ai/thrml). Pinned floor: THRML 0.1.4.
 
@@ -47,12 +48,14 @@ src/unsga3_extropic/
     thrml_ising.py      # THRML IsingEBM block Gibbs + anneal
     thrml_potts.py      # THRML CategoricalEBMFactor block Gibbs + weight rescale
     ew_metropolis.py    # exact E_w Metropolis (NumPy)
+  torx_circuit.py       # optional Torx PSWAP circuit (not the search loop)
   problems/
     codon_ising.py      # two-term Ising chain
     potts_chain.py      # two-term Potts chain
 benchmarks/             # run-record schema and append CLI
 demos/run_codon_thrml.py
 demos/run_potts_thrml.py
+demos/run_torx_pswap.py # optional; needs the torx extra
 docs/fidelity_hooks.md
 tests/
 .github/workflows/ci.yml
@@ -68,22 +71,31 @@ tests/
 | Front harness (HV, GD, coverage, `.npy`/`.npz`) | implemented |
 | Benchmark JSONL records | implemented (`benchmarks/`) |
 | Domain-wall Ising | not implemented (issue #10) |
-| Thermalizers / Torx / hardware | not implemented |
+| Torx `PSWAP` circuit | optional extra `torx` (`extro-torx`, Python ≥ 3.11), default off. Not the search loop |
+| Thermalizers / hardware | not implemented |
 | Reference-direction niching | implemented (ideal–nadir normalization, perpendicular association, closer occupant). No crossover or mutation |
-| CI | GitHub Actions: `pytest -m 'not thrml'`, full unit tests, Ising smoke, Potts smoke |
+| CI | GitHub Actions: core tests without the torx extra; a separate job runs the Torx smoke |
 
 ## Install and test
 
-Python 3.10+. THRML does not pin JAX; install a build for your platform. CPU:
+Python 3.10+ for the core package. THRML does not pin JAX; install a build for your platform. The `torx` extra needs Python 3.11+ because that is what `extro-torx` requires. CPU:
 
 ```bash
 pip install -e ".[dev,cpu]"
-pytest -q
+pytest -q -m 'not torx'
 python demos/run_codon_thrml.py --smoke
 python demos/run_potts_thrml.py --smoke
 ```
 
-`pytest` skips tests marked `thrml` when JAX or THRML is missing (`pytest -m 'not thrml'` runs only the NumPy tests). CI installs `thrml` and `jax[cpu]` and runs the full suite plus both smoke demos.
+`pytest` skips tests marked `thrml` when JAX or THRML is missing (`pytest -m 'not thrml and not torx'` runs only the NumPy tests). Tests marked `torx` skip when `extro-torx` is missing. CI's core job does not install that extra.
+
+Optional Torx circuit (Python ≥ 3.11):
+
+```bash
+pip install -e ".[dev,cpu,torx]"
+pytest -q -m torx
+python demos/run_torx_pswap.py
+```
 
 Default demos (no `--smoke`):
 
@@ -115,6 +127,10 @@ Pass an explicit `coloring` (a partition of the sites into independent sets), or
 ### Exact \(E_w\) Metropolis
 
 `ExactEwMetropolisBackend` evaluates \(E_w=w\cdot f(x)\) directly in NumPy. Wire any `objective_fn`. See `docs/fidelity_hooks.md` for how that archive, or a THRML front, can be compared with an external classical reference. The comparison functions do not call Bend or C#.
+
+### Torx PSWAP (optional)
+
+`TorxPswapCircuit` in `unsga3_extropic.torx_circuit` builds the [Torx docs](https://docs.torx.ai/en/latest/) quickstart: `DiscretePCircuit([PSWAP([0, 1])])`, a logit parameter `log(p / (1 - p))` with `p = 0.3`, and `BranchingSimulator`. Sampling starts at `|10)`. The smoke checks the empirical stay and swap rates against `1 - p` and `p` at 20,000 samples. `WeightSweepLoop` does not call this circuit. Nothing here turns the circuit into a THRML energy model.
 
 ## License
 
