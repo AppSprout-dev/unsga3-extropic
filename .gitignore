@@ -7,5 +7,6 @@ dist/
 build/
 .venv/
 demos/_out/
+benchmarks/**/artifacts/
 *.npy
 .DS_Store

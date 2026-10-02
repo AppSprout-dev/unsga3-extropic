@@ -43,17 +43,17 @@ This repository today is a **weight-sweep archive**. `weights.simplex_weights` b
 
 ## Current state vs target
 
-State is `main` at `7946bc1` / v0.1.1.
+State was checked at `7946bc1` / v0.1.1. Phase 1 and phase 3 boxes below are checked against this tree (package 0.2.0). Phase 2 is still open.
 
 | Piece | Now | Target |
 |-------|-----|--------|
 | Outer loop | `WeightSweepLoop`: one independent anneal per weight, then an offline non-dominated archive | Same sampler contract, plus reference-direction association and closer-in-niche survival on the **pooled** candidates |
 | Directions | `simplex_weights`: uniform 2-objective grid; Das–Dennis for \(M>2\), with Dirichlet fill if the grid is short | Keep this generator as \(H\). Niching consumes it. Do not fork a second, undocumented direction set |
 | Ising search | `ThrmlIsingBackend` on THRML 0.1.4: `SpinNode`, `Block`, `IsingEBM`, `IsingSamplingProgram`, `SamplingSchedule`, `sample_states`, `hinton_init`. Even/odd blocks only. `SamplingSchedule` has no beta, so each temperature rebuilds `IsingEBM` | Remains the p-bit / Ising path. Coloring stays explicit. Same-parity edges stay rejected until a tested coloring exists |
-| In-repo problem | `CodonIsingProblem`: a small two-term spin chain whose unary and pairwise terms **are** the `IsingEBM` energy. Not the codon walkthrough | Add a small Potts problem whose factors **are** the categorical energy. Leave the full spike-protein study in [extropic-ai/codon_opt](https://github.com/extropic-ai/codon_opt) |
-| Categorical / Potts | Not implemented. README says so | `CategoricalNode` + `CategoricalEBMFactor` + `CategoricalGibbsConditional` on a 2-colored chain, public API only |
+| In-repo problem | `CodonIsingProblem` (Ising chain) and `PottsChainProblem` (categorical chain). Neither is the codon walkthrough or a domain-wall encoding | Add a small Potts problem whose factors **are** the categorical energy. Leave the full spike-protein study in [extropic-ai/codon_opt](https://github.com/extropic-ai/codon_opt) |
+| Categorical / Potts | `ThrmlPottsBackend` + `PottsChainProblem`: public `CategoricalNode`, `CategoricalEBMFactor`, `CategoricalGibbsConditional`, `FactorSamplingProgram`, `FactorizedEBM`. Even/odd coloring. Anneal rescales weights. Domain-wall Ising is not in this tree | `CategoricalNode` + `CategoricalEBMFactor` + `CategoricalGibbsConditional` on a 2-colored chain, public API only |
 | General objectives | `ExactEwMetropolisBackend`: bit-flip Metropolis on exact \(E_w=w\cdot f(x)\). NumPy. No THRML program | Stays the non-ecosystem fallback and a fidelity workhorse. A THRML label requires an EBM whose energy matches \(f\) |
-| Fidelity | [docs/fidelity_hooks.md](docs/fidelity_hooks.md) tells a human to compare archives offline. `hypervolume_2d` exists. Bend, C#, and ZDT1 are out of tree | An in-repo harness (hypervolume, generational distance, coverage) over array fronts. External oracles remain data files |
+| Fidelity | `fidelity.py`: `hypervolume_2d`, generational distance, coverage, `.npy`/`.npz` loader. Bend, C#, and ZDT1 stay out of tree. Run records live under `benchmarks/` | An in-repo harness (hypervolume, generational distance, coverage) over array fronts. External oracles remain data files |
 | Torx | Not imported | Optional extra only, default off, Python ≥ 3.11, package `extro-torx` |
 | Thermalizers | Not imported. No public library | Watch. Zero code until a public package and docs exist |
 | Hardware | Not imported. No device runner | After the algorithm phases, and only against a public device API. Z1 facts above are citations, not a backend |
@@ -97,14 +97,14 @@ Phases 1–3 are the algorithm. Phase 2 can start on NumPy archives before phase
 
 **Acceptance criteria.**
 
-- [ ] A backend, named in the spirit of `ThrmlPottsBackend`, implements `SamplingBackend.sample_weight` and returns `BackendResult`.
-- [ ] The in-repo problem is a short chain (or 2-colorable graph) of categorical variables with a unary term and a pairwise term. Archived objectives equal those two energies. The scalarization passed to THRML is exactly \(w\cdot f\), checked by evaluating `FactorizedEBM.energy` (or the factor `energy` methods) on the samples and comparing to \(w\cdot f\) within a tight tolerance.
-- [ ] Neighbors do not share a block. A same-block edge raises before any sample. The test uses a chain, which is 2-colorable, as in example 00 and example 03.
-- [ ] Decisions lie in \(\{0,\ldots,K-1\}\). \(K\) is the conditional's `n_categories`, not a field invented on the node.
-- [ ] A unit test with THRML installed runs a tiny schedule (`n_samples` small, few betas). CI keeps the existing skip when `thrml` or `jax` is missing.
-- [ ] `pytest -m 'not thrml'` still passes without JAX.
-- [ ] README status row and [docs/fidelity_hooks.md](docs/fidelity_hooks.md) name the new backend as THRML-native and leave domain-wall Ising unclaimed.
-- [ ] Domain-wall encoding onto `ThrmlIsingBackend` is not part of this phase. It is appendix issue 7, for a later p-bit compilation of the same Potts energy.
+- [x] A backend, named in the spirit of `ThrmlPottsBackend`, implements `SamplingBackend.sample_weight` and returns `BackendResult`.
+- [x] The in-repo problem is a short chain (or 2-colorable graph) of categorical variables with a unary term and a pairwise term. Archived objectives equal those two energies. The scalarization passed to THRML is exactly \(w\cdot f\), checked by evaluating `FactorizedEBM.energy` (or the factor `energy` methods) on the samples and comparing to \(w\cdot f\) within a tight tolerance.
+- [x] Neighbors do not share a block. A same-block edge raises before any sample. The test uses a chain, which is 2-colorable, as in example 00 and example 03.
+- [x] Decisions lie in \(\{0,\ldots,K-1\}\). \(K\) is the conditional's `n_categories`, not a field invented on the node.
+- [x] A unit test with THRML installed runs a tiny schedule (`n_samples` small, few betas). CI keeps the existing skip when `thrml` or `jax` is missing.
+- [x] `pytest -m 'not thrml'` still passes without JAX.
+- [x] README status row and [docs/fidelity_hooks.md](docs/fidelity_hooks.md) name the new backend as THRML-native and leave domain-wall Ising unclaimed.
+- [x] Domain-wall encoding onto `ThrmlIsingBackend` is not part of this phase. It is appendix issue 7, for a later p-bit compilation of the same Potts energy.
 
 ### Phase 2 — Closer reference-direction niching
 
@@ -135,11 +135,11 @@ The normalization (ideal / nadir or the equivalent actually coded) is written do
 
 **Acceptance criteria.**
 
-- [ ] A small module computes, for minimization: 2-D hypervolume (reuse `hypervolume_2d`), generational distance to a reference front, and coverage (fraction of one front weakly dominated by the other). Inputs are `ndarray` fronts, not sampler objects.
-- [ ] Tests are marked so `pytest -m 'not thrml'` runs them. One fixture uses `CodonIsingProblem.enumerate_front` or a static array with a known hypervolume. One fixture checks coverage on nested fronts (a front that dominates another covers it; the converse does not).
-- [ ] A loader accepts a `.npy` or `.npz` array of shape `(n, M)` and rejects a shape mismatch with a clear error. No `subprocess`, no `bend`, no `dotnet`.
-- [ ] `docs/fidelity_hooks.md` documents the file schema and states that a Bend or C# binary is not a CI dependency. The harness does not retune betas to chase an external number.
-- [ ] The harness can score a `LoopResult` non-dominated front against `enumerate_front` for the existing Ising chain at \(n \le 16\). That test may be marked `thrml` if it samples; the metric tests themselves must not be.
+- [x] A small module computes, for minimization: 2-D hypervolume (reuse `hypervolume_2d`), generational distance to a reference front, and coverage (fraction of one front weakly dominated by the other). Inputs are `ndarray` fronts, not sampler objects.
+- [x] Tests are marked so `pytest -m 'not thrml'` runs them. One fixture uses `CodonIsingProblem.enumerate_front` or a static array with a known hypervolume. One fixture checks coverage on nested fronts (a front that dominates another covers it; the converse does not).
+- [x] A loader accepts a `.npy` or `.npz` array of shape `(n, M)` and rejects a shape mismatch with a clear error. No `subprocess`, no `bend`, no `dotnet`.
+- [x] `docs/fidelity_hooks.md` documents the file schema and states that a Bend or C# binary is not a CI dependency. The harness does not retune betas to chase an external number.
+- [x] The harness can score a `LoopResult` non-dominated front against `enumerate_front` for the existing Ising chain at \(n \le 16\). That test may be marked `thrml` if it samples; the metric tests themselves must not be.
 
 ### Phase 4 — Optional Torx
 
@@ -212,13 +212,13 @@ File these on GitHub after this roadmap is on `main`. Do not file them from the 
 
 **1. Add a Potts `CategoricalNode` THRML backend**
 
-Phase 1. Acceptance criteria:
+Phase 1. Filed as issue #4. Acceptance criteria (checked in the phase 1 section above):
 
-- Implement `SamplingBackend` with `CategoricalNode`, `CategoricalEBMFactor`, `CategoricalGibbsConditional`, and `FactorSamplingProgram` / `FactorizedEBM` as documented at [api-pgm](https://docs.thrml.ai/en/latest/api-pgm.html), [api-discrete-ebm](https://docs.thrml.ai/en/latest/api-discrete-ebm.html), [api-ebm](https://docs.thrml.ai/en/latest/api-ebm.html), and [example 00](https://docs.thrml.ai/en/latest/00_probabilistic_computing.html).
-- In-repo unary-plus-pairwise chain; tested energy identity between EBM energy and \(w\cdot f\); states in \([0, K)\); \(K\) lives on `CategoricalGibbsConditional`.
-- Reject an edge that falls inside one block. Anneal by rescaling weights, because `SamplingSchedule` has no beta ([example 03](https://docs.thrml.ai/en/latest/03_codon_optimization.html)).
-- THRML smoke in CI; NumPy tests still run with `-m 'not thrml'`.
-- README updated. Domain-wall Ising is a different issue.
+- [x] Implement `SamplingBackend` with `CategoricalNode`, `CategoricalEBMFactor`, `CategoricalGibbsConditional`, and `FactorSamplingProgram` / `FactorizedEBM` as documented at [api-pgm](https://docs.thrml.ai/en/latest/api-pgm.html), [api-discrete-ebm](https://docs.thrml.ai/en/latest/api-discrete-ebm.html), [api-ebm](https://docs.thrml.ai/en/latest/api-ebm.html), and [example 00](https://docs.thrml.ai/en/latest/00_probabilistic_computing.html).
+- [x] In-repo unary-plus-pairwise chain; tested energy identity between EBM energy and \(w\cdot f\); states in \([0, K)\); \(K\) lives on `CategoricalGibbsConditional`.
+- [x] Reject an edge that falls inside one block. Anneal by rescaling weights, because `SamplingSchedule` has no beta ([example 03](https://docs.thrml.ai/en/latest/03_codon_optimization.html)).
+- [x] THRML smoke in CI; NumPy tests still run with `-m 'not thrml'`.
+- [x] README updated. Domain-wall Ising is a different issue.
 
 **2. Prefer the closer occupant of each reference direction**
 
@@ -231,11 +231,11 @@ Phase 2. Acceptance criteria:
 
 **3. Add an in-repo front-comparison harness**
 
-Phase 3. Acceptance criteria:
+Phase 3. Filed as issue #6. Acceptance criteria (checked in the phase 3 section above):
 
-- Hypervolume (2-D), generational distance, and coverage on minimization arrays.
-- `.npy` / `.npz` loader. No Bend, C#, or ZDT1 process.
-- Tests under `pytest -m 'not thrml'`. Update [docs/fidelity_hooks.md](docs/fidelity_hooks.md).
+- [x] Hypervolume (2-D), generational distance, and coverage on minimization arrays.
+- [x] `.npy` / `.npz` loader. No Bend, C#, or ZDT1 process.
+- [x] Tests under `pytest -m 'not thrml'`. Update [docs/fidelity_hooks.md](docs/fidelity_hooks.md).
 
 **4. Optional `extro-torx` extra, default off**
 

@@ -1,4 +1,4 @@
-"""Weight-sweep multiobjective search on a THRML Ising substrate.
+"""Weight-sweep multiobjective search on THRML Ising and Potts substrates.
 
 Weight-sweep scalarizations, sample with THRML block Gibbs or exact E_w
 Metropolis, then keep an offline non-dominated archive.
@@ -13,7 +13,7 @@ from unsga3_extropic.archive import Archive, nondominated_mask, unique_rows
 from unsga3_extropic.loop import AnnealConfig, LoopResult, WeightSweepLoop
 from unsga3_extropic.weights import simplex_weights
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 __all__ = [
     "Archive",

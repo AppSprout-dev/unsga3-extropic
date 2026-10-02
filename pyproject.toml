@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "unsga3-extropic"
-version = "0.1.1"
-description = "Weight-sweep multiobjective search on THRML Ising sampling, plus an exact E_w Metropolis fallback"
+version = "0.2.0"
+description = "Weight-sweep multiobjective search on THRML Ising and Potts sampling, plus an exact E_w Metropolis fallback"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "AppSprout" }]
-keywords = ["unsga-iii", "multi-objective", "thrml", "extropic", "ising"]
+keywords = ["unsga-iii", "multi-objective", "thrml", "extropic", "ising", "potts"]
 dependencies = [
   "thrml>=0.1.4",
   "numpy>=1.24",

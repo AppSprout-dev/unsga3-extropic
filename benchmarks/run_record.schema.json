@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AppSprout-dev/unsga3-extropic/benchmarks/run_record.schema.json",
+  "title": "unsga3-extropic run record",
+  "description": "One JSON object per line in a JSONL log. Front arrays live in .npy/.npz files named by artifacts.front.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "date",
+    "git_sha",
+    "issue",
+    "phase",
+    "problem",
+    "backend",
+    "seeds",
+    "schedule",
+    "eval_budget",
+    "metrics",
+    "artifacts",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "date": {
+      "type": "string",
+      "description": "UTC ISO-8601, for example 2026-10-02T16:19:45Z.",
+      "minLength": 20
+    },
+    "git_sha": {"type": "string", "minLength": 1},
+    "issue": {
+      "type": "string",
+      "description": "GitHub issue id this run is evidence for, or \"none\" for a stub.",
+      "minLength": 1
+    },
+    "phase": {"type": "string", "minLength": 1},
+    "problem": {"type": "string", "minLength": 1},
+    "backend": {"type": "string", "minLength": 1},
+    "seeds": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "integer", "minimum": 0}
+    },
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["betas", "n_warmup", "n_samples", "steps_per_sample", "n_weights"],
+      "properties": {
+        "betas": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "number"}
+        },
+        "n_warmup": {"type": "integer", "minimum": 0},
+        "n_samples": {"type": "integer", "minimum": 1},
+        "steps_per_sample": {"type": "integer", "minimum": 1},
+        "n_weights": {"type": "integer", "minimum": 1}
+      }
+    },
+    "eval_budget": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Recorded objective vectors. Gibbs micro-steps stay in schedule."
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nd_count",
+        "hypervolume_2d",
+        "hv_ref",
+        "generational_distance",
+        "coverage"
+      ],
+      "properties": {
+        "nd_count": {"type": "integer", "minimum": 0},
+        "hypervolume_2d": {"type": ["number", "null"]},
+        "hv_ref": {
+          "type": ["array", "null"],
+          "prefixItems": [{"type": "number"}, {"type": "number"}],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "generational_distance": {"type": ["number", "null"]},
+        "coverage": {"type": ["number", "null"]}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["front"],
+      "properties": {
+        "front": {
+          "type": "string",
+          "description": "Path to a .npy or .npz minimization front of shape (n, M). .npz key is front, or the only array."
+        }
+      }
+    },
+    "notes": {"type": "string"}
+  }
+}
