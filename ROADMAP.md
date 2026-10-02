@@ -43,15 +43,15 @@ This repository is a **weight-sweep archive** with reference-direction niching o
 
 ## Current state vs target
 
-State was checked at `7946bc1` / v0.1.1, then updated as phases landed. Phase 1, phase 2, phase 3, and phase 4 boxes below are checked against this tree (package 0.4.0).
+State was checked at `7946bc1` / v0.1.1, then updated as phases landed. Phase 1, phase 2, phase 3, and phase 4 boxes below are checked against this tree (package 0.5.0). Appendix item 7, the domain-wall image, is also in this tree as a THRML simulation.
 
 | Piece | Now | Target |
 |-------|-----|--------|
 | Outer loop | `WeightSweepLoop`: one independent anneal per weight (`sample_weight` only), then ideal–nadir association and closer-in-niche survival on the pooled non-dominated rows. `Archive.nondominated` remains beside that set | Same sampler contract, plus reference-direction association and closer-in-niche survival on the **pooled** candidates |
 | Directions | `simplex_weights`: uniform 2-objective grid; Das–Dennis for \(M>2\), with Dirichlet fill if the grid is short | Keep this generator as \(H\). Niching consumes it. Do not fork a second, undocumented direction set |
-| Ising search | `ThrmlIsingBackend` on THRML 0.1.4: `SpinNode`, `Block`, `IsingEBM`, `IsingSamplingProgram`, `SamplingSchedule`, `sample_states`, `hinton_init`. Even/odd blocks only. `SamplingSchedule` has no beta, so each temperature rebuilds `IsingEBM` | Remains the p-bit / Ising path. Coloring stays explicit. Same-parity edges stay rejected until a tested coloring exists |
-| In-repo problem | `CodonIsingProblem` (Ising chain) and `PottsChainProblem` (categorical chain). Neither is the codon walkthrough or a domain-wall encoding | Add a small Potts problem whose factors **are** the categorical energy. Leave the full spike-protein study in [extropic-ai/codon_opt](https://github.com/extropic-ai/codon_opt) |
-| Categorical / Potts | `ThrmlPottsBackend` + `PottsChainProblem`: public `CategoricalNode`, `CategoricalEBMFactor`, `CategoricalGibbsConditional`, `FactorSamplingProgram`, `FactorizedEBM`. Even/odd coloring. Anneal rescales weights. Domain-wall Ising is not in this tree | `CategoricalNode` + `CategoricalEBMFactor` + `CategoricalGibbsConditional` on a 2-colored chain, public API only |
+| Ising search | `ThrmlIsingBackend` on THRML 0.1.4: `SpinNode`, `Block`, `IsingEBM`, `IsingSamplingProgram`, `SamplingSchedule`, `sample_states`, `hinton_init`. Even/odd blocks only. `SamplingSchedule` has no beta, so each temperature rebuilds `IsingEBM`. The Potts domain-wall image uses this backend only when its spin graph is 2-colored; otherwise it uses a separate 4-color `SpinEBMFactor` program | Remains the p-bit / Ising path. Coloring stays explicit. Same-parity edges stay rejected on `ThrmlIsingBackend` |
+| In-repo problem | `CodonIsingProblem` (Ising chain) and `PottsChainProblem` (categorical chain). Neither is the codon walkthrough. The Potts chain has a domain-wall Ising image in `domain_wall.py`; that image is not a copy of codon_opt | Add a small Potts problem whose factors **are** the categorical energy. Leave the full spike-protein study in [extropic-ai/codon_opt](https://github.com/extropic-ai/codon_opt) |
+| Categorical / Potts | `ThrmlPottsBackend` + `PottsChainProblem`: public `CategoricalNode`, `CategoricalEBMFactor`, `CategoricalGibbsConditional`, `FactorSamplingProgram`, `FactorizedEBM`. Even/odd coloring. Anneal rescales weights. The same energy also has a domain-wall Ising image (`ThrmlDomainWallBackend`), still sampled in THRML | `CategoricalNode` + `CategoricalEBMFactor` + `CategoricalGibbsConditional` on a 2-colored chain, public API only |
 | General objectives | `ExactEwMetropolisBackend`: bit-flip Metropolis on exact \(E_w=w\cdot f(x)\). NumPy. No THRML program | Stays the non-ecosystem fallback and a fidelity workhorse. A THRML label requires an EBM whose energy matches \(f\) |
 | Fidelity | `fidelity.py`: `hypervolume_2d`, generational distance, coverage, `.npy`/`.npz` loader. Bend, C#, and ZDT1 stay out of tree. Run records live under `benchmarks/` | An in-repo harness (hypervolume, generational distance, coverage) over array fronts. External oracles remain data files |
 | Torx | Optional extra `torx` (`extro-torx` 0.0.2, Python ≥ 3.11): `TorxPswapCircuit` samples the docs quickstart (`DiscretePCircuit`, `PSWAP`, `BranchingSimulator`). Default off. Not a search backend and not a THRML program | Optional extra only, default off, Python ≥ 3.11, package `extro-torx` |
@@ -103,8 +103,8 @@ Phases 1–3 are the algorithm. Phase 2 can start on NumPy archives before phase
 - [x] Decisions lie in \(\{0,\ldots,K-1\}\). \(K\) is the conditional's `n_categories`, not a field invented on the node.
 - [x] A unit test with THRML installed runs a tiny schedule (`n_samples` small, few betas). CI keeps the existing skip when `thrml` or `jax` is missing.
 - [x] `pytest -m 'not thrml'` still passes without JAX.
-- [x] README status row and [docs/fidelity_hooks.md](docs/fidelity_hooks.md) name the new backend as THRML-native and leave domain-wall Ising unclaimed.
-- [x] Domain-wall encoding onto `ThrmlIsingBackend` is not part of this phase. It is appendix issue 7, for a later p-bit compilation of the same Potts energy.
+- [x] README status row and [docs/fidelity_hooks.md](docs/fidelity_hooks.md) name the new backend as THRML-native. Phase 1 left domain-wall Ising unclaimed.
+- [x] Domain-wall encoding was not part of phase 1. Appendix item 7 (issue #10) is that later p-bit compilation, and it is a THRML simulation rather than a device run.
 
 ### Phase 2 — Closer reference-direction niching
 
@@ -175,7 +175,7 @@ The paper ([arXiv:2608.01615](https://arxiv.org/abs/2608.01615), abstract dated 
 Published constraints to respect, once a backend is even discussable:
 
 - Z1 samples a **sparse Ising** model, degree 16, chromatic Gibbs ([blog](https://extropic.ai/writing/from-one-to-one-billion/)). An all-to-all coupling is not a Z1 program.
-- Native Potts is the categorical model in phase 1. Running it on p-bit silicon is the domain-wall Ising encoding in [example 03](https://docs.thrml.ai/en/latest/03_codon_optimization.html), which uses a 4-coloring, not the even/odd shortcut. That encoding is appendix issue 7 and is still a THRML simulation until a device API exists.
+- Native Potts is the categorical model in phase 1. The p-bit image is the domain-wall Ising encoding in [example 03](https://docs.thrml.ai/en/latest/03_codon_optimization.html). Appendix item 7 implements that encoding in THRML: `ThrmlIsingBackend` when the spin graph is 2-colored, and the example's 4-coloring otherwise. It is still a simulation. A device API is phase 6.
 - The blog also mentions an early-access GPU simulator API. It is not documented on docs.thrml.ai or docs.torx.ai. It is not a dependency and not this phase's API.
 
 **Acceptance criteria.**
@@ -265,9 +265,9 @@ Phase 6. Acceptance criteria:
 
 Optional, after child 1. This is the p-bit compilation path in [example 03](https://docs.thrml.ai/en/latest/03_codon_optimization.html), not a new algorithm. Acceptance criteria:
 
-- Encode the phase-1 Potts energy as an Ising model by domain-wall encoding, sampled with `ThrmlIsingBackend` or a coloring-general Ising program if the constraint graph is not 2-colored.
-- A test shows decoded categorical states reproduce the Potts objectives on a toy chain. Invalid thermometers are counted, not silently scored as feasible.
-- Does not vendor `codon_opt` and does not claim Z1 execution (that is child 6).
+- [x] Encode the phase-1 Potts energy as an Ising model by domain-wall encoding, sampled with `ThrmlIsingBackend` or a coloring-general Ising program if the constraint graph is not 2-colored.
+- [x] A test shows decoded categorical states reproduce the Potts objectives on a toy chain. Invalid thermometers are counted, not silently scored as feasible.
+- [x] Does not vendor `codon_opt` and does not claim Z1 execution (that is child 6).
 
 ## Sources
 

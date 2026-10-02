@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "unsga3-extropic"
-version = "0.4.0"
-description = "Weight-sweep multiobjective search on THRML Ising and Potts sampling, with reference-direction niching, an exact E_w Metropolis fallback, and an optional Torx circuit"
+version = "0.5.0"
+description = "Weight-sweep multiobjective search on THRML Ising and Potts sampling, with a domain-wall Ising image of the Potts chain, reference-direction niching, an exact E_w Metropolis fallback, and an optional Torx circuit"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }

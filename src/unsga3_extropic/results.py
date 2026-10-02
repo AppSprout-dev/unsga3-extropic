@@ -5,7 +5,8 @@ the problem, backend, seeds, anneal schedule, and metrics. Front arrays
 are files (``.npy`` / ``.npz``); the record stores their paths.
 
 ``measure_potts_chain`` is the Potts smoke used by ``demos/run_potts_thrml.py``
-and ``benchmarks/append_run.py``. It does not tune betas.
+and ``benchmarks/append_run.py``. ``measure_domain_wall`` is the same chain
+sampled through its domain-wall Ising image. Neither tunes betas.
 """
 
 from __future__ import annotations
@@ -368,6 +369,78 @@ def measure_potts_chain(*, smoke: bool, front_path: Path) -> dict:
             "PottsChainProblem.enumerate_front (minimization). "
             "eval_budget counts recorded samples. "
             "Fidelity metrics are the in-repo harness (issue 6). "
-            "Domain-wall Ising is issue 10 and is not this run."
+            "This row is the categorical Potts sampler. "
+            "The domain-wall Ising image is a separate run (issue 10)."
         ),
     )
+
+
+def measure_domain_wall(*, smoke: bool, front_path: Path) -> dict:
+    """Sample the Potts chain through its domain-wall Ising image.
+
+    The reference front is ``PottsChainProblem.enumerate_front``. Recorded
+    rows are decoded categorical states. Invalid thermometers are excluded
+    from the archive and counted in ``notes``. The run is a THRML
+    simulation, not a Z1 execution and not a ``codon_opt`` reproduction.
+    """
+    if smoke:
+        problem = PottsChainProblem(n_sites=6, n_categories=3)
+        weights = np.array([[0.5, 0.5], [0.8, 0.2]], dtype=np.float64)
+        anneal = AnnealConfig(
+            betas=(1.0, 4.0),
+            n_warmup=2,
+            n_samples=4,
+            steps_per_sample=1,
+        )
+    else:
+        problem = PottsChainProblem(n_sites=8, n_categories=3)
+        weights = np.array(
+            [
+                [0.9, 0.1],
+                [0.7, 0.3],
+                [0.5, 0.5],
+                [0.3, 0.7],
+                [0.1, 0.9],
+            ],
+            dtype=np.float64,
+        )
+        anneal = AnnealConfig(
+            betas=(0.5, 1.0, 2.0, 4.0),
+            n_warmup=8,
+            n_samples=8,
+            steps_per_sample=1,
+        )
+    base_seed = 11
+    backend = problem.make_domain_wall_backend()
+    kind = backend.program_kind(weights[0])
+    loop = WeightSweepLoop(
+        backend=backend,
+        anneal=anneal,
+        seed=base_seed,
+        weights=weights,
+        n_obj=2,
+    )
+    result = loop.run()
+    _exact_x, exact = problem.enumerate_front()
+    n_invalid = int(sum(row.n_invalid for row in result.per_weight))
+    record = build_measured_record(
+        result,
+        anneal=anneal,
+        base_seed=base_seed,
+        issue="10",
+        phase="optional",
+        problem="potts_chain",
+        backend="thrml_domain_wall",
+        front_path=front_path,
+        reference=exact,
+        notes=(
+            "Domain-wall Ising image of PottsChainProblem (THRML example 03). "
+            f"Sampler program is {kind}. "
+            "GD and coverage compare decoded feasible states to "
+            "PottsChainProblem.enumerate_front (minimization). "
+            f"Invalid thermometers excluded from the archive: {n_invalid}. "
+            "eval_budget counts scored categorical rows. "
+            "THRML simulation only; not a Z1 run and not codon_opt."
+        ),
+    )
+    return record

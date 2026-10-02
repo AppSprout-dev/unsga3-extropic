@@ -11,11 +11,12 @@ weight niches          WeightSweepLoop + simplex_weights / custom w
 niche survival         Archive.niche_survival (ideal–nadir, perpendicular distance, closer occupant)
 Ising-native search    ThrmlIsingBackend + problems/codon_ising.py
 Potts-native search    ThrmlPottsBackend + problems/potts_chain.py
+Potts p-bit image      ThrmlDomainWallBackend (THRML simulation, not a device)
 general objectives     ExactEwMetropolisBackend
 front comparison       fidelity.py (hypervolume_2d, generational distance, coverage)
 ```
 
-`demos/run_codon_thrml.py` and `demos/run_potts_thrml.py` check the two THRML paths. On those problems the archived objectives are the factor energies, so there is no surrogate between \(f\) and the sampler. Domain-wall Ising (a p-bit image of the Potts chain) is not implemented; it is [issue #10](https://github.com/AppSprout-dev/unsga3-extropic/issues/10).
+`demos/run_codon_thrml.py` and `demos/run_potts_thrml.py` check the Ising and categorical Potts paths. `demos/run_domain_wall.py` checks the domain-wall Ising image of the same Potts chain. On the categorical problem the archived objectives are the factor energies. On the domain-wall path they are those same Potts objectives after thermometer decoding. Invalid thermometers are counted and omitted, not entered as feasible rows. The image is a THRML simulation ([example 03](https://docs.thrml.ai/en/latest/03_codon_optimization.html)). It is not a Z1 run and it does not vendor [codon_opt](https://github.com/extropic-ai/codon_opt).
 
 The harness does not retune betas to chase an external number.
 

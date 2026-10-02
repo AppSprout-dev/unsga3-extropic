@@ -31,4 +31,6 @@ python benchmarks/append_run.py --smoke --out benchmarks/records/runs.jsonl
 
 `demos/run_codon_thrml.py` and `demos/run_potts_thrml.py` append the same kind of record under `demos/_out/` and to `benchmarks/records/runs.jsonl`. The codon line is issue `5` / phase `2`. The Potts line stays issue `4` / phase `1` and mentions the niche count in `notes`.
 
+`demos/run_domain_wall.py` appends a line for the domain-wall Ising image of the same Potts chain (issue `10`, phase `optional`, backend `thrml_domain_wall`). `notes` names the sampler (`thrml_ising` or `spin_ebm`) and how many invalid thermometers were left out of the archive. That run is a THRML simulation. It is not a Z1 measurement.
+
 The optional Torx smoke (`demos/run_torx_pswap.py`, issue 7) reports a PSWAP stay/swap rate. That rate is not a minimization front, so the demo does not append a line here. The `torx` pytest is the record of that rate.
