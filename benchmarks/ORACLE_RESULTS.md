@@ -4,7 +4,7 @@ Generated 2026-10-02T18:49:22Z. `git_sha` at record time: `3db013e7cc4a3cf1b9cdd
 
 Full seeds 1–15 on ZDT1, ZDT2, and DTLZ2.
 
-Sampler: **NumPy ExactEw** (`ExactEwContinuousBackend`). One-coordinate truncated-normal Metropolis (`step_scale=0.1`) on exact \(E_w = w \cdot f(x)\), then the weight-sweep archive. **Not THRML-native.** Not an Ising model, not a Potts factor, and not a fitted surrogate. Not U-NSGA-III: no SBX, no polynomial mutation, no generational population, tournament not applicable.
+Sampler: **NumPy ExactEw** (`ExactEwContinuousBackend`). One-coordinate truncated-normal Metropolis (`step_scale=0.1`) on exact \(E_w = w \cdot f(x)\), then the weight-sweep archive. **Not THRML-native.** Not an Ising model, not a Potts factor, and not a fitted surrogate. Not U-NSGA-III: no SBX, no polynomial mutation, no generational population, tournament not applicable. The classical continuous U-NSGA-III column is a separate file, `benchmarks/ORACLE_UNSGA3_RESULTS.md`.
 
 Bend and C# columns are the published PymooCompatible cells. They were not re-run here.
 Source: AppSprout-dev/unsga3-bend docs/ORACLE-MULTISEED.md (2026-09-21, seeds 1–15, PymooCompatible).

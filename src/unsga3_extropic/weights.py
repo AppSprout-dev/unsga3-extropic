@@ -66,3 +66,22 @@ def _das_dennis(H: int, M: int) -> np.ndarray:
         return np.ones((1, M)) / M
     rec(H, 0, [])
     return np.asarray(pts, dtype=np.float64)
+
+
+def das_dennis_directions(n_obj: int, partitions: int) -> np.ndarray:
+    """Every Das–Dennis point with ``partitions`` divisions.
+
+    The count is ``C(partitions + n_obj - 1, n_obj - 1)``. Two objectives
+    at ``partitions = 12`` are 13 points, the same set as
+    ``simplex_weights(13, 2)``. Three objectives are 91 points. This is
+    the reference set the classical continuous column associates to. It
+    does not draw a second, random simplex.
+    """
+    if n_obj < 2:
+        raise ValueError("n_obj must be >= 2")
+    if partitions < 1:
+        raise ValueError("partitions must be >= 1")
+    pts = _das_dennis(int(partitions), int(n_obj))
+    if len(pts) != _n_das_dennis(int(partitions), int(n_obj)):
+        raise AssertionError("Das–Dennis count does not match the binomial size")
+    return pts.astype(np.float64)

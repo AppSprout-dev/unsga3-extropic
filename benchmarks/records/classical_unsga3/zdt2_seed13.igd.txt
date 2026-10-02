@@ -1,0 +1,8 @@
+igd=0.01794446206396589
+problem=zdt2
+front_rows=52
+pf_rows=500
+pf_source=analytic-zdt2 n=500
+objective_evals=13000
+seed=13
+sampler=classical-unsga3

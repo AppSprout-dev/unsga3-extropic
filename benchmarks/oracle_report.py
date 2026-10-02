@@ -130,7 +130,7 @@ def render_oracle_results(
         "",
         status,
         "",
-        "Sampler: **NumPy ExactEw** (`ExactEwContinuousBackend`). One-coordinate truncated-normal Metropolis (`step_scale=0.1`) on exact \\(E_w = w \\cdot f(x)\\), then the weight-sweep archive. **Not THRML-native.** Not an Ising model, not a Potts factor, and not a fitted surrogate. Not U-NSGA-III: no SBX, no polynomial mutation, no generational population, tournament not applicable.",
+        "Sampler: **NumPy ExactEw** (`ExactEwContinuousBackend`). One-coordinate truncated-normal Metropolis (`step_scale=0.1`) on exact \\(E_w = w \\cdot f(x)\\), then the weight-sweep archive. **Not THRML-native.** Not an Ising model, not a Potts factor, and not a fitted surrogate. Not U-NSGA-III: no SBX, no polynomial mutation, no generational population, tournament not applicable. The classical continuous U-NSGA-III column is a separate file, `benchmarks/ORACLE_UNSGA3_RESULTS.md`.",
         "",
         "Bend and C# columns are the published PymooCompatible cells. They were not re-run here.",
         f"Source: {PUBLISHED_SOURCE}.",

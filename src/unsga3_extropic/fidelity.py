@@ -2,8 +2,9 @@
 
 Inputs are ``ndarray`` fronts, not samplers. 2-D hypervolume reuses
 ``archive.hypervolume_2d``. Generational distance is the Van Veldhuizen
-mean nearest-reference distance. Coverage is the fraction of one front
-weakly dominated by the other.
+mean nearest-reference distance. Inverted generational distance is the
+yardstick ``igd=`` mean: each reference point to the nearest obtained
+point. Coverage is the fraction of one front weakly dominated by the other.
 
 ``.npy`` and ``.npz`` loaders do not start another process. Bend, C#, and
 ZDT1 stay outside the repo; a front they emit can be dropped in as a file.
@@ -19,6 +20,37 @@ import numpy as np
 from unsga3_extropic.archive import hypervolume_2d
 
 _TOL = 1e-12
+
+
+def inverted_generational_distance(
+    front: np.ndarray,
+    reference: np.ndarray,
+) -> float:
+    """Mean Euclidean distance from each reference row to the nearest front row.
+
+    This is the ``igd=`` quantity used on the continuous yardstick: average,
+    over Pareto-front samples, of the distance to the closest obtained
+    point. An empty ``front`` returns ``inf``. An empty ``reference``
+    raises. This is not ``generational_distance``, which averages from the
+    obtained front toward the reference and defaults to an RMS (``p = 2``).
+    """
+    got = np.asarray(front, dtype=np.float64)
+    ref = np.asarray(reference, dtype=np.float64)
+    if got.ndim != 2 or ref.ndim != 2:
+        raise ValueError(
+            f"front and reference must be 2-D, got {got.shape} and {ref.shape}"
+        )
+    if got.shape[1] != ref.shape[1]:
+        raise ValueError(
+            f"objective counts differ: front {got.shape[1]} vs reference {ref.shape[1]}"
+        )
+    if len(ref) == 0:
+        raise ValueError("reference front is empty")
+    if len(got) == 0:
+        return float("inf")
+    diff = ref[:, None, :] - got[None, :, :]
+    nearest = np.linalg.norm(diff, axis=-1).min(axis=1)
+    return float(nearest.mean())
 
 
 def generational_distance(
