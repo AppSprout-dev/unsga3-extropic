@@ -53,6 +53,8 @@ python benchmarks/run_deep.py --only codon
 python benchmarks/run_deep.py --skip-torx
 ```
 
+Each seed is a new process. JAX keeps compiled programs for the life of the process, and a single process holding every seed ran out of host memory. A row already in the log with `profile=deep` and this schedule is skipped, so stopping and starting the command again resumes.
+
 `benchmarks/DEEP_RESULTS.md` is rewritten from that invocation. Search rows append to `records/runs.jsonl`. The Torx deep check (100,000 samples, three seeds, same `p = 0.3` as the docs quickstart) is a stay/swap rate in `records/torx_pswap_deep.json`. It is not a front, so it is not a JSONL row. `.github/workflows/deep.yml` runs the full command on `workflow_dispatch` and uploads the files. It does not commit them.
 
 Deep rows are THRML simulations, plus a NumPy `exact_ew` bit-flip Metropolis run on the codon chain. They are not Z1 measurements and they do not call Thermalizers.

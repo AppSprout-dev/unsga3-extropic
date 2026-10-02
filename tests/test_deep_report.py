@@ -116,6 +116,36 @@ def test_summary_labels_deep_and_refuses_hardware_claims():
     assert "not a THRML program" in text
     assert "Mean swap rate" in text
     assert "n_sites=6, K=3" in text
+    assert "global_bias=0.05" in text
+
+
+def test_resume_skips_a_matching_deep_row_only():
+    path = ROOT / "benchmarks" / "run_deep.py"
+    spec = importlib.util.spec_from_file_location("run_deep", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    schedule = {
+        "betas": [0.25, 0.5, 1.0, 2.0, 4.0, 8.0],
+        "n_warmup": 24,
+        "n_samples": 24,
+        "steps_per_sample": 2,
+        "n_weights": 11,
+    }
+    row = {
+        "backend": "thrml_potts",
+        "notes": "profile=deep. base_seed=11. replicate=2/3.",
+        "schedule": schedule,
+    }
+    assert module.recorded_deep_seed([row], "potts", 11) is row
+    assert module.recorded_deep_seed([row], "potts", 19) is None
+    assert module.recorded_deep_seed([row], "codon", 11) is None
+    smaller = {
+        "backend": "thrml_potts",
+        "notes": "profile=deep. base_seed=11. replicate=2/3.",
+        "schedule": {**schedule, "n_samples": 4},
+    }
+    assert module.recorded_deep_seed([smaller], "potts", 11) is None
 
 
 def test_deep_cli_help_does_not_sample():

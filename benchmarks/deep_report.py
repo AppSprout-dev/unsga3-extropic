@@ -34,7 +34,8 @@ _NICHE = re.compile(
 _ELAPSED = re.compile(r"elapsed_s=([0-9]+(?:\.[0-9]+)?)")
 _INVALID = re.compile(r"Invalid thermometers excluded from the archive: (\d+)")
 _EXACT = re.compile(r"Reference front size (\d+)")
-_INSTANCE = re.compile(r"instance=([^.]+)\.")
+# Instance labels can contain decimals (global_bias=0.05). The terminator is ". ".
+_INSTANCE = re.compile(r"instance=(.+?)\. ")
 _BASE_SEED = re.compile(r"base_seed=(\d+)")
 _REPLICATE = re.compile(r"replicate=(\d+/\d+)")
 
@@ -366,7 +367,7 @@ export JAX_PLATFORMS=cpu
 python benchmarks/run_deep.py
 ```
 
-That appends one JSONL line per backend and seed to `benchmarks/records/runs.jsonl`, rewrites this file, and writes `benchmarks/records/torx_pswap_deep.json`. Front arrays go to `benchmarks/records/artifacts/` and stay gitignored.
+That appends one JSONL line per backend and seed to `benchmarks/records/runs.jsonl`, rewrites this file, and writes `benchmarks/records/torx_pswap_deep.json`. Each seed is its own process so compiled JAX programs from the previous seed are released. A deep row already in the log for the same backend, base seed, and schedule is skipped. Front arrays go to `benchmarks/records/artifacts/` and stay gitignored.
 
 Default CI does not run this. `.github/workflows/deep.yml` is `workflow_dispatch` only. A dispatch run uploads the log and this summary as artifacts; it does not commit them.
 
