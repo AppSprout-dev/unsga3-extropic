@@ -33,6 +33,10 @@ jobs:
         run: python demos/run_potts_thrml.py --smoke
         env:
           JAX_PLATFORMS: cpu
+      - name: Domain-wall Ising smoke
+        run: python demos/run_domain_wall.py --smoke
+        env:
+          JAX_PLATFORMS: cpu
 
   torx:
     runs-on: ubuntu-latest

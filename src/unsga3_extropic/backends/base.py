@@ -10,12 +10,19 @@ import numpy as np
 
 @dataclass
 class BackendResult:
-    """Samples from one weight vector / anneal run."""
+    """Samples from one weight vector / anneal run.
+
+    ``n_evals`` is the number of scored rows. ``n_invalid`` counts rows the
+    backend refused to score. Ising, Potts, and Metropolis leave it at 0.
+    The domain-wall sampler counts spin patterns that are not thermometers
+    and omits them from ``decisions`` and ``objectives``.
+    """
 
     decisions: np.ndarray  # (n_samples, n_vars)
     objectives: np.ndarray  # (n_samples, n_obj)
     energies: np.ndarray  # (n_samples,) scalarized E_w
     n_evals: int
+    n_invalid: int = 0
 
 
 @runtime_checkable

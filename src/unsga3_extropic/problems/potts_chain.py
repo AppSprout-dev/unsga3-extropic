@@ -19,8 +19,10 @@ weights passed to the sampler are::
 ``FactorizedEBM.energy`` on those weights equals ``w · f``. Annealing
 multiplies ``W`` by beta inside ``ThrmlPottsBackend``.
 
-This is an in-repo smoke. It is not the codon-optimization walkthrough and
-not a domain-wall Ising encoding (https://github.com/AppSprout-dev/unsga3-extropic/issues/10).
+This is an in-repo smoke. It is not the codon-optimization walkthrough.
+``make_domain_wall_backend`` is the p-bit image of this same energy
+(example 03 domain-wall encoding). That path is a THRML simulation, not a
+device run and not a copy of ``codon_opt``.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from unsga3_extropic.archive import nondominated_mask
+from unsga3_extropic.backends.thrml_domain_wall import ThrmlDomainWallBackend
 from unsga3_extropic.backends.thrml_potts import (
     ThrmlPottsBackend,
     even_odd_coloring,
@@ -104,6 +107,18 @@ class PottsChainProblem:
             build_potts=self.build_potts,
             objective_fn=self.energies_from_states,
             coloring=self.coloring(),
+        )
+
+    def make_domain_wall_backend(
+        self, *, constraint_strength: float = 4.0
+    ) -> ThrmlDomainWallBackend:
+        """Ising image of this Potts energy (domain-wall / thermometer spins)."""
+        return ThrmlDomainWallBackend(
+            n_sites=self.n_sites,
+            n_categories=self.n_categories,
+            build_potts=self.build_potts,
+            objective_fn=self.energies_from_states,
+            constraint_strength=constraint_strength,
         )
 
     def enumerate_states(self) -> np.ndarray:
