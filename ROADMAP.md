@@ -161,6 +161,8 @@ Torx on this check is `extro-torx` 0.0.2, Python ≥ 3.11 ([getting started](htt
 
 The paper ([arXiv:2608.01615](https://arxiv.org/abs/2608.01615), abstract dated with revisions through August 2026) says the thermalizers framework takes a Torx program and replaces factors with thermodynamic kernels implemented and sampled with THRML. The [Extropic post](https://extropic.ai/writing/from-one-to-one-billion/) calls the library upcoming and points at GitHub. That release is not on GitHub or PyPI as of 2026-10-02.
 
+**Status (2026-10-02).** A check found no public package or API: public `extropic-ai` repos are `thrml`, `codon_opt`, `thrml-skill`, `torx`, and `sparse-transformers` (no `thermalizers` repo), and PyPI has no `thermalizers`, `extro-thermalizers`, or `thermalizer`. The trigger is not met. [arXiv:2608.01615](https://arxiv.org/abs/2608.01615) alone does not count.
+
 **Acceptance criteria.**
 
 - [ ] This phase adds no production code and no dependency.
