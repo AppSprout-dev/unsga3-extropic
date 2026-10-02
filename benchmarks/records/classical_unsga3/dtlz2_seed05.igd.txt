@@ -1,0 +1,8 @@
+igd=0.004779418681922744
+problem=dtlz2
+front_rows=92
+pf_rows=91
+pf_source=analytic-das-dennis-l2
+objective_evals=13800
+seed=5
+sampler=classical-unsga3
