@@ -18,7 +18,7 @@ front comparison       fidelity.py (hypervolume_2d, generational distance, cover
 
 `demos/run_codon_thrml.py` and `demos/run_potts_thrml.py` check the Ising and categorical Potts paths. `demos/run_domain_wall.py` checks the domain-wall Ising image of the same Potts chain. On the categorical problem the archived objectives are the factor energies. On the domain-wall path they are those same Potts objectives after thermometer decoding. Invalid thermometers are counted and omitted, not entered as feasible rows. The image is a THRML simulation ([example 03](https://docs.thrml.ai/en/latest/03_codon_optimization.html)). It is not a Z1 run and it does not vendor [codon_opt](https://github.com/extropic-ai/codon_opt).
 
-The harness does not retune betas to chase an external number.
+The harness does not retune betas to chase an external number. `benchmarks/run_deep.py` scores the same functions at the deep budget. That run is not a device measurement.
 
 ## In-repo metrics
 

@@ -36,4 +36,5 @@ pythonpath = ["src"]
 markers = [
   "thrml: requires the thrml and jax packages",
   "torx: requires the extro-torx extra (Python >= 3.11)",
+  "deep: on-demand multi-seed benchmark (benchmarks/run_deep.py); excluded from default CI",
 ]

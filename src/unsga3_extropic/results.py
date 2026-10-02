@@ -4,9 +4,11 @@ The schema lives in ``benchmarks/run_record.schema.json``. A record names
 the problem, backend, seeds, anneal schedule, and metrics. Front arrays
 are files (``.npy`` / ``.npz``); the record stores their paths.
 
-``measure_potts_chain`` is the Potts smoke used by ``demos/run_potts_thrml.py``
-and ``benchmarks/append_run.py``. ``measure_domain_wall`` is the same chain
-sampled through its domain-wall Ising image. Neither tunes betas.
+Budgets come from ``unsga3_extropic.schedules``. ``profile=smoke`` is the
+CI demo, ``profile=default`` is the demo without ``--smoke``, and
+``profile=deep`` is the multi-seed run in ``benchmarks/run_deep.py``.
+Notes carry that label. The functions below do not search for a beta
+schedule, and they do not claim a Z1 or Thermalizers run.
 """
 
 from __future__ import annotations
@@ -18,9 +20,22 @@ from pathlib import Path
 
 import numpy as np
 
+from unsga3_extropic.backends.ew_metropolis import ExactEwMetropolisBackend
 from unsga3_extropic.fidelity import compare_fronts
 from unsga3_extropic.loop import AnnealConfig, LoopResult, WeightSweepLoop
+from unsga3_extropic.problems.codon_ising import CodonIsingProblem
 from unsga3_extropic.problems.potts_chain import PottsChainProblem
+from unsga3_extropic.schedules import (
+    SearchSchedule,
+    CODON_INSTANCE_LABEL,
+    codon_problem_kwargs,
+    potts_instance,
+    potts_instance_label,
+    profile_clause,
+    require_base_seed,
+    resolve_profile,
+    schedule_for,
+)
 
 SCHEMA_VERSION = 1
 # WeightSweepLoop uses seed + 1009 * weight_index.
@@ -260,6 +275,7 @@ def build_measured_record(
     front_path: Path,
     notes: str,
     reference: np.ndarray | None = None,
+    eval_budget: int | None = None,
 ) -> dict:
     """Validate a run record for one finished ``WeightSweepLoop``.
 
@@ -295,7 +311,7 @@ def build_measured_record(
             "steps_per_sample": int(anneal.steps_per_sample),
             "n_weights": int(len(result.weights)),
         },
-        "eval_budget": int(result.total_evals),
+        "eval_budget": int(result.total_evals if eval_budget is None else eval_budget),
         "metrics": {
             "nd_count": int(scores["nd_count"]),
             "hypervolume_2d": scores["hypervolume_2d"],
@@ -310,54 +326,167 @@ def build_measured_record(
     return record
 
 
-def measure_potts_chain(*, smoke: bool, front_path: Path) -> dict:
+def _run_scheduled(
+    backend,
+    schedule: SearchSchedule,
+    base_seed: int,
+) -> LoopResult:
+    loop = WeightSweepLoop(
+        backend=backend,
+        anneal=schedule.anneal(),
+        seed=base_seed,
+        weights=schedule.weight_matrix(),
+        n_obj=2,
+    )
+    return loop.run()
+
+
+def _recorded_rows(result: LoopResult) -> int:
+    return int(sum(len(row.objectives) for row in result.per_weight))
+
+
+def _codon_bit_objectives(problem: CodonIsingProblem):
+    """Map ``{0, 1}`` bit rows to codon objectives on ``±1`` spins."""
+
+    def objective_fn(bits: np.ndarray) -> np.ndarray:
+        spins = 2.0 * np.asarray(bits, dtype=np.float64) - 1.0
+        return problem.energies_from_spins(spins)
+
+    return objective_fn
+
+
+def _potts_problem(profile: str) -> PottsChainProblem:
+    n_sites, n_categories = potts_instance(profile)
+    return PottsChainProblem(n_sites=n_sites, n_categories=n_categories)
+
+
+def measure_codon_ising(
+    *,
+    smoke: bool,
+    front_path: Path,
+    profile: str | None = None,
+    base_seed: int | None = None,
+) -> dict:
+    """Sample ``CodonIsingProblem`` with THRML Ising block Gibbs.
+
+    ``profile`` selects the budget in ``schedules``. ``smoke=True`` is
+    ``profile=smoke`` and cannot be combined with another profile.
+    ``eval_budget`` counts recorded samples, not Gibbs micro-steps.
+    """
+    name = resolve_profile(smoke=smoke, profile=profile)
+    schedule = schedule_for("codon", name)
+    seed = require_base_seed(schedule, base_seed)
+    problem = CodonIsingProblem(**codon_problem_kwargs())
+    result = _run_scheduled(problem.make_backend(), schedule, seed)
+    if _recorded_rows(result) != schedule.recorded_per_seed():
+        raise RuntimeError(
+            "codon sample count "
+            f"{_recorded_rows(result)} != schedule product {schedule.recorded_per_seed()}"
+        )
+    _exact_x, exact = problem.enumerate_front()
+    return build_measured_record(
+        result,
+        anneal=schedule.anneal(),
+        base_seed=seed,
+        issue="5",
+        phase="2",
+        problem="codon_ising",
+        backend="thrml_ising",
+        front_path=front_path,
+        reference=exact,
+        notes=(
+            f"{profile_clause(schedule, seed)} "
+            f"instance={CODON_INSTANCE_LABEL}. "
+            "GD and coverage compare the non-dominated archive to "
+            "CodonIsingProblem.enumerate_front (minimization). "
+            f"Reference front size {len(exact)}. "
+            "eval_budget counts recorded samples. "
+            "Candidates come from sample_weight only. "
+            "THRML IsingEBM block Gibbs. Not a Z1 run and not Thermalizers."
+        ),
+    )
+
+
+def measure_codon_exact_ew(
+    *,
+    front_path: Path,
+    base_seed: int,
+) -> dict:
+    """NumPy bit-flip Metropolis on the same codon instance as the deep Ising run.
+
+    ``eval_budget`` is the number of recorded objective rows. Notes also
+    give the energy-evaluation count, which includes warmup proposals.
+    This backend does not build a THRML program.
+    """
+    schedule = schedule_for("codon", "deep")
+    seed = require_base_seed(schedule, base_seed)
+    problem = CodonIsingProblem(**codon_problem_kwargs())
+    backend = ExactEwMetropolisBackend(
+        n_bits=problem.n_spins,
+        objective_fn=_codon_bit_objectives(problem),
+    )
+    result = _run_scheduled(backend, schedule, seed)
+    n_rows = _recorded_rows(result)
+    if n_rows != schedule.recorded_per_seed():
+        raise RuntimeError(
+            f"exact_ew recorded rows {n_rows} != schedule product {schedule.recorded_per_seed()}"
+        )
+    _exact_x, exact = problem.enumerate_front()
+    n_energy = int(result.total_evals)
+    return build_measured_record(
+        result,
+        anneal=schedule.anneal(),
+        base_seed=seed,
+        issue="5",
+        phase="2",
+        problem="codon_ising",
+        backend="exact_ew",
+        front_path=front_path,
+        reference=exact,
+        eval_budget=n_rows,
+        notes=(
+            f"{profile_clause(schedule, seed)} "
+            f"instance={CODON_INSTANCE_LABEL}. "
+            "NumPy ExactEwMetropolisBackend on the same CodonIsingProblem "
+            "instance as the THRML Ising rows. Bit-flip Metropolis with exact "
+            "E_w = w · f(x). Not a THRML program, not a Z1 run, and not Thermalizers. "
+            "GD and coverage compare the non-dominated archive to "
+            "CodonIsingProblem.enumerate_front (minimization). "
+            f"Reference front size {len(exact)}. "
+            "eval_budget counts recorded objective rows. "
+            f"Energy evaluations including warmup proposals: {n_energy}."
+        ),
+    )
+
+
+def measure_potts_chain(
+    *,
+    smoke: bool,
+    front_path: Path,
+    profile: str | None = None,
+    base_seed: int | None = None,
+) -> dict:
     """Sample ``PottsChainProblem`` and return a validated run record.
 
     The front file is ``front_path`` (``.npz`` key ``front``). Metrics use
     ``enumerate_front`` as the reference. ``eval_budget`` counts recorded
     samples (``n_weights * len(betas) * n_samples``), not Gibbs micro-steps.
     """
-    if smoke:
-        problem = PottsChainProblem(n_sites=6, n_categories=3)
-        weights = np.array([[0.5, 0.5], [0.8, 0.2]], dtype=np.float64)
-        anneal = AnnealConfig(
-            betas=(1.0, 4.0),
-            n_warmup=2,
-            n_samples=4,
-            steps_per_sample=1,
+    name = resolve_profile(smoke=smoke, profile=profile)
+    schedule = schedule_for("potts", name)
+    seed = require_base_seed(schedule, base_seed)
+    problem = _potts_problem(name)
+    result = _run_scheduled(problem.make_backend(), schedule, seed)
+    if _recorded_rows(result) != schedule.recorded_per_seed():
+        raise RuntimeError(
+            "potts sample count "
+            f"{_recorded_rows(result)} != schedule product {schedule.recorded_per_seed()}"
         )
-    else:
-        problem = PottsChainProblem(n_sites=8, n_categories=3)
-        weights = np.array(
-            [
-                [0.9, 0.1],
-                [0.7, 0.3],
-                [0.5, 0.5],
-                [0.3, 0.7],
-                [0.1, 0.9],
-            ],
-            dtype=np.float64,
-        )
-        anneal = AnnealConfig(
-            betas=(0.5, 1.0, 2.0, 4.0),
-            n_warmup=8,
-            n_samples=8,
-            steps_per_sample=1,
-        )
-    base_seed = 7
-    loop = WeightSweepLoop(
-        backend=problem.make_backend(),
-        anneal=anneal,
-        seed=base_seed,
-        weights=weights,
-        n_obj=2,
-    )
-    result = loop.run()
     _exact_x, exact = problem.enumerate_front()
     return build_measured_record(
         result,
-        anneal=anneal,
-        base_seed=base_seed,
+        anneal=schedule.anneal(),
+        base_seed=seed,
         issue="4",
         phase="1",
         problem="potts_chain",
@@ -365,68 +494,49 @@ def measure_potts_chain(*, smoke: bool, front_path: Path) -> dict:
         front_path=front_path,
         reference=exact,
         notes=(
+            f"{profile_clause(schedule, seed)} "
+            f"instance={potts_instance_label(name)}. "
             "GD and coverage compare the non-dominated archive to "
             "PottsChainProblem.enumerate_front (minimization). "
+            f"Reference front size {len(exact)}. "
             "eval_budget counts recorded samples. "
             "Fidelity metrics are the in-repo harness (issue 6). "
             "This row is the categorical Potts sampler. "
-            "The domain-wall Ising image is a separate run (issue 10)."
+            "The domain-wall Ising image is a separate run (issue 10). "
+            "Not a Z1 run and not Thermalizers."
         ),
     )
 
 
-def measure_domain_wall(*, smoke: bool, front_path: Path) -> dict:
+def measure_domain_wall(
+    *,
+    smoke: bool,
+    front_path: Path,
+    profile: str | None = None,
+    base_seed: int | None = None,
+) -> dict:
     """Sample the Potts chain through its domain-wall Ising image.
 
     The reference front is ``PottsChainProblem.enumerate_front``. Recorded
     rows are decoded categorical states. Invalid thermometers are excluded
     from the archive and counted in ``notes``. The run is a THRML
     simulation, not a Z1 execution and not a ``codon_opt`` reproduction.
+    ``eval_budget`` counts scored categorical rows, so it can be below
+    ``schedule_product`` when thermometers are invalid.
     """
-    if smoke:
-        problem = PottsChainProblem(n_sites=6, n_categories=3)
-        weights = np.array([[0.5, 0.5], [0.8, 0.2]], dtype=np.float64)
-        anneal = AnnealConfig(
-            betas=(1.0, 4.0),
-            n_warmup=2,
-            n_samples=4,
-            steps_per_sample=1,
-        )
-    else:
-        problem = PottsChainProblem(n_sites=8, n_categories=3)
-        weights = np.array(
-            [
-                [0.9, 0.1],
-                [0.7, 0.3],
-                [0.5, 0.5],
-                [0.3, 0.7],
-                [0.1, 0.9],
-            ],
-            dtype=np.float64,
-        )
-        anneal = AnnealConfig(
-            betas=(0.5, 1.0, 2.0, 4.0),
-            n_warmup=8,
-            n_samples=8,
-            steps_per_sample=1,
-        )
-    base_seed = 11
+    name = resolve_profile(smoke=smoke, profile=profile)
+    schedule = schedule_for("domain_wall", name)
+    seed = require_base_seed(schedule, base_seed)
+    problem = _potts_problem(name)
     backend = problem.make_domain_wall_backend()
-    kind = backend.program_kind(weights[0])
-    loop = WeightSweepLoop(
-        backend=backend,
-        anneal=anneal,
-        seed=base_seed,
-        weights=weights,
-        n_obj=2,
-    )
-    result = loop.run()
-    _exact_x, exact = problem.enumerate_front()
+    kind = backend.program_kind(schedule.weight_matrix()[0])
+    result = _run_scheduled(backend, schedule, seed)
     n_invalid = int(sum(row.n_invalid for row in result.per_weight))
-    record = build_measured_record(
+    _exact_x, exact = problem.enumerate_front()
+    return build_measured_record(
         result,
-        anneal=anneal,
-        base_seed=base_seed,
+        anneal=schedule.anneal(),
+        base_seed=seed,
         issue="10",
         phase="optional",
         problem="potts_chain",
@@ -434,13 +544,15 @@ def measure_domain_wall(*, smoke: bool, front_path: Path) -> dict:
         front_path=front_path,
         reference=exact,
         notes=(
+            f"{profile_clause(schedule, seed)} "
+            f"instance={potts_instance_label(name)}. "
             "Domain-wall Ising image of PottsChainProblem (THRML example 03). "
             f"Sampler program is {kind}. "
             "GD and coverage compare decoded feasible states to "
             "PottsChainProblem.enumerate_front (minimization). "
+            f"Reference front size {len(exact)}. "
             f"Invalid thermometers excluded from the archive: {n_invalid}. "
             "eval_budget counts scored categorical rows. "
-            "THRML simulation only; not a Z1 run and not codon_opt."
+            "THRML simulation only; not a Z1 run and not codon_opt and not Thermalizers."
         ),
     )
-    return record

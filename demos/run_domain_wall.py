@@ -6,6 +6,9 @@ From a checkout, after ``pip install -e ".[dev,cpu]"``::
     python demos/run_domain_wall.py
     python demos/run_domain_wall.py --smoke
 
+``--smoke`` is ``profile=smoke`` (CI). No flag is ``profile=default``.
+The multi-seed deep budget is ``benchmarks/run_deep.py``.
+
 The categorical Potts energy is compiled to thermometer spins and sampled
 with THRML. This is not a Z1 run and not the codon-optimization walkthrough.
 """

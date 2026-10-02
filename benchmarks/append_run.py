@@ -4,8 +4,9 @@
     python benchmarks/append_run.py --stub --out benchmarks/records/runs.jsonl
     python benchmarks/append_run.py --smoke --out benchmarks/records/runs.jsonl
 
-``--smoke`` samples the in-repo Potts chain with THRML. ``--stub`` only
-checks that a record can be appended.
+``--smoke`` samples the in-repo Potts chain with THRML (``profile=smoke``).
+``--stub`` only checks that a record can be appended. The multi-seed deep
+budget is ``benchmarks/run_deep.py``, not a flag on this script.
 """
 
 from __future__ import annotations

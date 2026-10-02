@@ -34,3 +34,25 @@ python benchmarks/append_run.py --smoke --out benchmarks/records/runs.jsonl
 `demos/run_domain_wall.py` appends a line for the domain-wall Ising image of the same Potts chain (issue `10`, phase `optional`, backend `thrml_domain_wall`). `notes` names the sampler (`thrml_ising` or `spin_ebm`) and how many invalid thermometers were left out of the archive. That run is a THRML simulation. It is not a Z1 measurement.
 
 The optional Torx smoke (`demos/run_torx_pswap.py`, issue 7) reports a PSWAP stay/swap rate. That rate is not a minimization front, so the demo does not append a line here. The `torx` pytest is the record of that rate.
+
+## Smoke, default, and deep
+
+`notes` on new rows start with `profile=smoke`, `profile=default`, or `profile=deep`. Rows committed before that prefix are the CI smokes: codon `eval_budget` 24, Potts and domain wall `eval_budget` 16. The log is append-only, so those lines are not rewritten.
+
+| Profile | Where | What it is |
+|---------|--------|------------|
+| `smoke` | `demos/run_*.py --smoke`, `benchmarks/append_run.py --smoke`, default CI | Two weights, two betas, one seed. Potts chain has 6 sites |
+| `default` | the same demos without `--smoke` | Medium budget, one seed. Potts and domain wall use 8 sites |
+| `deep` | `benchmarks/run_deep.py` | 11 simplex weights, six betas, 24 warmup, 24 samples, 2 steps between samples, seeds `7`, `11`, `19`. Same instances as smoke. Not in default CI |
+
+Deep recorded rows per seed, before the domain-wall thermometer filter: `11 * 6 * 24 = 1584`. Across three seeds that is 4752. The codon smoke is 24. The Potts smoke is 16.
+
+```bash
+python benchmarks/run_deep.py
+python benchmarks/run_deep.py --only codon
+python benchmarks/run_deep.py --skip-torx
+```
+
+`benchmarks/DEEP_RESULTS.md` is rewritten from that invocation. Search rows append to `records/runs.jsonl`. The Torx deep check (100,000 samples, three seeds, same `p = 0.3` as the docs quickstart) is a stay/swap rate in `records/torx_pswap_deep.json`. It is not a front, so it is not a JSONL row. `.github/workflows/deep.yml` runs the full command on `workflow_dispatch` and uploads the files. It does not commit them.
+
+Deep rows are THRML simulations, plus a NumPy `exact_ew` bit-flip Metropolis run on the codon chain. They are not Z1 measurements and they do not call Thermalizers.

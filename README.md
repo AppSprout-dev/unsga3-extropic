@@ -43,6 +43,7 @@ src/unsga3_extropic/
   archive.py            # ND archive, ideal–nadir niching, 2-D hypervolume helper
   fidelity.py           # generational distance, coverage, front loader
   results.py            # JSONL benchmark run records
+  schedules.py          # smoke, default, and deep anneal budgets
   weights.py            # simplex / Das–Dennis directions
   loop.py               # WeightSweepLoop
   backends/
@@ -55,7 +56,7 @@ src/unsga3_extropic/
   problems/
     codon_ising.py      # two-term Ising chain
     potts_chain.py      # two-term Potts chain
-benchmarks/             # run-record schema and append CLI
+benchmarks/             # run-record schema, smoke append CLI, deep runner
 demos/run_codon_thrml.py
 demos/run_potts_thrml.py
 demos/run_domain_wall.py
@@ -74,11 +75,11 @@ tests/
 | `ExactEwMetropolisBackend` | implemented (NumPy, not THRML) |
 | `CodonIsingProblem` + demo | implemented, THRML Ising smoke |
 | Front harness (HV, GD, coverage, `.npy`/`.npz`) | implemented |
-| Benchmark JSONL records | implemented (`benchmarks/`) |
+| Benchmark JSONL records | implemented (`benchmarks/`). `profile=smoke` and `profile=default` are the demos. `profile=deep` is `benchmarks/run_deep.py` |
 | Torx `PSWAP` circuit | optional extra `torx` (`extro-torx`, Python ≥ 3.11), default off. Not the search loop |
 | Thermalizers / hardware | not implemented (2026-10-02 check: no public package or API) |
 | Reference-direction niching | implemented (ideal–nadir normalization, perpendicular association, closer occupant). No crossover or mutation |
-| CI | GitHub Actions: core tests without the torx extra; a separate job runs the Torx smoke |
+| CI | GitHub Actions: core tests without the torx extra; a separate job runs the Torx smoke. Deep benchmarks are `workflow_dispatch` only (`.github/workflows/deep.yml`) |
 
 ## Install and test
 
@@ -110,11 +111,21 @@ python demos/run_potts_thrml.py
 python demos/run_domain_wall.py
 ```
 
-A measured Potts run can also be appended to the benchmark log:
+A measured Potts smoke can also be appended to the benchmark log:
 
 ```bash
 python benchmarks/append_run.py --smoke --out benchmarks/records/runs.jsonl
 ```
+
+The demos without `--smoke` are `profile=default` (a medium budget; Potts and domain wall use an 8-site chain). They are not the deep profile.
+
+Deep benchmarks use the smoke problem instances (codon 12 spins; Potts 6 sites, 3 categories) with a much larger search budget: 11 simplex weights, six betas `(0.25, 0.5, 1, 2, 4, 8)`, 24 warmup steps, 24 samples, 2 steps between samples, and three seeds `(7, 11, 19)`. That is 1,584 recorded objective rows per seed on the THRML backends and on a NumPy exact-`E_w` Metropolis comparator of the codon chain. Domain-wall rows can be fewer when thermometers are invalid. A separate Torx block draws the documented PSWAP circuit at 100,000 samples for three seeds. That rate is not a search front.
+
+```bash
+python benchmarks/run_deep.py
+```
+
+Default CI does not run it. Dispatch [`.github/workflows/deep.yml`](.github/workflows/deep.yml) when you want a GitHub-hosted re-run. Records append to `benchmarks/records/runs.jsonl` with `profile=deep` in `notes`. `benchmarks/DEEP_RESULTS.md` is the table for the latest full invocation. These runs are THRML simulations (and one NumPy comparator). They are not Z1 measurements and they do not call Thermalizers.
 
 See [benchmarks/README.md](benchmarks/README.md) for the record schema.
 
