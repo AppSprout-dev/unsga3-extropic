@@ -56,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     elapsed = time.perf_counter() - t0
     record["notes"] = record["notes"] + f" elapsed_s={elapsed:.3f}. version={__version__}."
     append_run_record(out_dir / "potts_runs.jsonl", record)
+    append_run_record(ROOT / "benchmarks" / "records" / "runs.jsonl", record)
     front = load_front(front_path, n_obj=2)
 
     summary = {
@@ -76,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     (out_dir / "potts_summary.json").write_text(json.dumps(summary, indent=2))
     print(f"  wrote {out_dir / 'potts_summary.json'}")
     print(f"  appended {out_dir / 'potts_runs.jsonl'}")
+    print(f"  appended {ROOT / 'benchmarks' / 'records' / 'runs.jsonl'}")
     return 0
 
 
