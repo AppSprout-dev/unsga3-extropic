@@ -29,6 +29,7 @@ The harness does not retune betas to chase an external number. `benchmarks/run_d
 |----------|------------|
 | `hypervolume_2d` (in `archive`) | 2-D hypervolume of the non-dominated rows that sit strictly below a reference point |
 | `generational_distance` | \((\mathrm{mean}_i d_i^p)^{1/p}\), Euclidean distance from each obtained row to the nearest reference row. Default \(p = 2\) |
+| `inverted_generational_distance` | Mean Euclidean distance from each **reference** row to the nearest obtained row. This is the continuous-yardstick `igd=` quantity. An empty obtained front is `inf` |
 | `coverage(A, B)` | Fraction of rows of `B` weakly dominated by some row of `A`. For minimization, `a` weakly dominates `b` when `a <= b` on every objective |
 | `load_front` | Read a `.npy` or `.npz` array of shape `(n, M)` |
 | `compare_fronts` | `nd_count`, plus hypervolume (2-D), generational distance, and coverage when a reference front is passed |
@@ -54,5 +55,7 @@ Bend, C#, and any ZDT1 harness live outside this repository. They are not import
 A THRML run of a non-factorized objective still needs an Ising or Potts expression of \(E_w\) first. This repo does not fit that surrogate. `ExactEwMetropolisBackend` remains the NumPy path for a general bitstring \(f\). `ExactEwContinuousBackend` is the NumPy path for a general box \(f\).
 
 `fidelity.py` still does not start Bend, C#, or pymoo. The optional benchmark script `benchmarks/run_oracle_continuous.py` is separate from that harness. It shells out to `unsga3-bend/ab/igd_vs_pymoo.py` when that file is on disk, and it records only the printed `igd=` line. CI does not run it and does not install pymoo. The reference front for that script is the analytic 500-point ZDT curve, or the 91-point Das–Dennis DTLZ2 sphere at partitions 12. A missing script is an error, not a made-up IGD.
+
+`benchmarks/run_classical_unsga3.py` scores the same problems with `unsga3_extropic.classical`, a NumPy generational U-NSGA-III. It does not shell out. IGD is `inverted_generational_distance` on those same reference sets (DTLZ2 rows are Das–Dennis directions scaled to unit length). The script does not import pymoo, Bend, or THRML, and it does not call `WeightSweepLoop`. Results are `benchmarks/ORACLE_UNSGA3_RESULTS.md`. The ExactEw table is left in place.
 
 Thermalizers are not wired up here. The optional Torx circuit (`unsga3_extropic.torx_circuit`) samples a documented `PSWAP` and is not a search backend, so this harness does not score it.

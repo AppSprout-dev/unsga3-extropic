@@ -2,7 +2,7 @@
 
 Weight-sweep multiobjective search on **THRML** Ising and Potts models, plus a NumPy exact-\(E_w\) Metropolis fallback. The Potts chain can also be sampled as a domain-wall Ising model inside THRML. That image is not a hardware run. An optional extra also runs one Torx circuit. That circuit is not the search step.
 
-The outer loop samples one reference direction at a time, pools the candidates, and ranks them. Survival keeps the closer occupant of each direction: ideal–nadir normalization, then perpendicular distance. Candidates still come only from that sampling step. Recombination and mutation are not part of this package. The phased plan, drift guards, and definition of done are in [ROADMAP.md](ROADMAP.md).
+The outer loop samples one reference direction at a time, pools the candidates, and ranks them. Survival keeps the closer occupant of each direction: ideal–nadir normalization, then perpendicular distance. Candidates still come only from that sampling step. Recombination and mutation are not part of `WeightSweepLoop`. A separate NumPy module, `unsga3_extropic.classical`, runs a generational U-NSGA-III (SBX and polynomial mutation) so continuous ZDT1, ZDT2, and DTLZ2 can be scored against published Bend/C# IGD. That column is not THRML and not Extropic sampling. The phased plan, drift guards, and definition of done are in [ROADMAP.md](ROADMAP.md).
 
 ## Extropic alignment
 
@@ -16,7 +16,8 @@ The outer loop samples one reference direction at a time, pools the candidates, 
 | `PottsChainProblem` | **THRML-native energies** on a short categorical chain: one unary cost and one nearest-neighbor Potts cost. Those two costs are the archived objectives, and \(w\cdot f\) is the `FactorizedEBM` energy. Not the codon walkthrough. |
 | `ThrmlDomainWallBackend` | **THRML simulation of the p-bit image** of `PottsChainProblem`. Domain-wall (thermometer) encoding from [example 03](https://docs.thrml.ai/en/latest/03_codon_optimization.html): \(K\) categories become \(K-1\) spins, Potts weights become Ising biases and couplings by the documented first and second differences, and a ferromagnetic penalty \(P\) prices broken thermometers. A \(K=2\) chain is 2-colored and is sampled with `ThrmlIsingBackend`. A \(K\ge 3\) chain is not; it uses `SpinEBMFactor`, `SpinGibbsConditional`, and `FactorSamplingProgram` with the example's `(site parity, spin-index parity)` blocks. Decoded categorical states are the archived objectives. Patterns that are not thermometers are counted and left out of that archive. This is not a Z1 run and not a copy of [codon_opt](https://github.com/extropic-ai/codon_opt). |
 | `ExactEwMetropolisBackend` | **NumPy fallback.** Bit-flip Metropolis on exact \(E_w=w\cdot f(x)\) when \(f\) is not an Ising or Potts factor energy. No THRML program and no Extropic device. |
-| `ExactEwContinuousBackend` | **NumPy, not THRML.** One-coordinate truncated-normal Metropolis on a box (`step_scale=0.1`), same exact \(E_w\). Used for continuous ZDT1, ZDT2, and DTLZ2, which are not Ising energies. No surrogate is fit into `IsingEBM`. |
+| `ExactEwContinuousBackend` | **NumPy, not THRML.** One-coordinate truncated-normal Metropolis on a box (`step_scale=0.1`), same exact \(E_w\). Used for continuous ZDT1, ZDT2, and DTLZ2, which are not Ising energies. No surrogate is fit into `IsingEBM`. Not U-NSGA-III. |
+| `unsga3_extropic.classical` | **NumPy classical U-NSGA-III fidelity column.** Generational population, Das–Dennis directions, SBX, polynomial mutation, closer-in-niche tournament. Same ZDT1/ZDT2/DTLZ2 yardstick as the ExactEw table. Not THRML, not Ising, not Potts, and not called by `WeightSweepLoop`. |
 | `TorxPswapCircuit` | **Torx, optional, default off.** Two-pbit `PSWAP` on `DiscretePCircuit`, sampled with `BranchingSimulator`, as in the [Torx quickstart](https://docs.torx.ai/en/latest/) (`extro-torx` 0.0.2, Python ≥ 3.11). `theta` is the logit of the swap probability. Not a `SamplingBackend`, not a THRML program, and not a hardware runner. |
 | Not in this repo | Thermalizers and device execution. The domain-wall path above is a THRML simulation of the in-repo Potts chain. |
 
@@ -28,7 +29,7 @@ Source for the library: [extropic-ai/thrml](https://github.com/extropic-ai/thrml
 |-------------------|--------------|
 | Vector fitness \(f_1,\ldots,f_M\) | Problem objectives |
 | Preference / niches | The sweep's weight vectors (`weights.simplex_weights` or a custom `w`). Those same vectors are the reference directions |
-| Variation / search | Annealed sampling under \(E_w=\sum_i w_i f_i\) via `sample_weight` only. No crossover or mutation |
+| Variation / search | Weight-sweep: annealed sampling under \(E_w=\sum_i w_i f_i\) via `sample_weight` only. No crossover or mutation in `WeightSweepLoop`. The separate classical column uses SBX and polynomial mutation |
 | Ranking | Non-dominated archive (`Archive.nondominated`) |
 | Niche survival | `Archive.niche_survival` / `LoopResult.niche_front`: pooled non-dominated rows are ideal–nadir normalized and associated to the sweep directions by perpendicular distance. Each direction keeps its closer occupant. A lone occupant of an empty direction is kept over a duplicate in a crowded direction. Dominated rows stay out. Both sets are returned |
 
@@ -57,8 +58,13 @@ src/unsga3_extropic/
   problems/
     codon_ising.py      # two-term Ising chain
     potts_chain.py      # two-term Potts chain
-    continuous.py       # ZDT1, ZDT2, DTLZ2 (NumPy ExactEw, not THRML)
-benchmarks/             # run-record schema, smoke append CLI, deep runner
+    continuous.py       # ZDT1, ZDT2, DTLZ2 objectives (NumPy, not THRML)
+  classical/            # classical continuous U-NSGA-III (NumPy fidelity column)
+    sbx.py              # simulated binary crossover
+    pm.py               # polynomial mutation
+    unsga3.py           # generational survival and mating
+    igd.py              # yardstick IGD and analytic reference fronts
+benchmarks/             # run-record schema, smoke append CLI, deep runner, oracle columns
 demos/run_codon_thrml.py
 demos/run_potts_thrml.py
 demos/run_domain_wall.py
@@ -75,13 +81,14 @@ tests/
 | `ThrmlPottsBackend` + `PottsChainProblem` | implemented (THRML 0.1.4 categorical API) |
 | Domain-wall Ising image of that Potts chain | THRML simulation (`ThrmlDomainWallBackend`, issue #10). Not Z1, not `codon_opt` |
 | `ExactEwMetropolisBackend` | implemented (NumPy bit-flip, not THRML) |
-| `ExactEwContinuousBackend` + ZDT1/ZDT2/DTLZ2 | implemented (NumPy box Metropolis, not THRML). Yardstick table: `benchmarks/ORACLE_RESULTS.md` |
+| `ExactEwContinuousBackend` + ZDT1/ZDT2/DTLZ2 | implemented (NumPy box Metropolis, not THRML, not U-NSGA-III). Yardstick table: `benchmarks/ORACLE_RESULTS.md` |
+| Classical continuous U-NSGA-III | implemented in `unsga3_extropic.classical` (NumPy SBX + polynomial mutation). Apples-to-apples IGD column: `benchmarks/ORACLE_UNSGA3_RESULTS.md`. Not inside `WeightSweepLoop` |
 | `CodonIsingProblem` + demo | implemented, THRML Ising smoke |
 | Front harness (HV, GD, coverage, `.npy`/`.npz`) | implemented |
 | Benchmark JSONL records | implemented (`benchmarks/`). `profile=smoke` and `profile=default` are the demos. `profile=deep` is `benchmarks/run_deep.py` |
 | Torx `PSWAP` circuit | optional extra `torx` (`extro-torx`, Python ≥ 3.11), default off. Not the search loop |
 | Thermalizers / hardware | not implemented (2026-10-02 check: no public package or API) |
-| Reference-direction niching | implemented (ideal–nadir normalization, perpendicular association, closer occupant). No crossover or mutation |
+| Reference-direction niching | implemented on the weight-sweep archive (ideal–nadir normalization, perpendicular association, closer occupant). `WeightSweepLoop` has no crossover or mutation. The classical column niching lives in `unsga3_extropic.classical` |
 | CI | GitHub Actions: core tests without the torx extra; a separate job runs the Torx smoke. Deep benchmarks are `workflow_dispatch` only (`.github/workflows/deep.yml`) |
 
 ## Install and test
@@ -153,6 +160,16 @@ Pass an explicit `coloring` (a partition of the sites into independent sets), or
 `ExactEwMetropolisBackend` evaluates \(E_w=w\cdot f(x)\) directly in NumPy on bitstrings. `ExactEwContinuousBackend` does the same on a box: each proposal adds `Normal(0, 0.1)` to one coordinate and keeps the draw only if it stays inside, with the truncated-normal Hastings correction. Wire any `objective_fn`. Continuous ZDT1 (`n=30`), ZDT2 (`n=30`), and DTLZ2 (`M=3`, `k=10`) use the continuous backend because those objectives are not Ising or Potts factor energies. The run is labeled NumPy ExactEw. It is not THRML-native.
 
 `benchmarks/run_oracle_continuous.py` spends a `pop * gens` objective-call budget from the Bend ORACLE-MULTISEED protocol (ZDT1 52/100, ZDT2 52/250, DTLZ2 92/150, seeds 1–15, partitions 12) and writes the non-dominated archive as CSV. IGD is the `igd=` line from an external `unsga3-bend/ab/igd_vs_pymoo.py` (analytic PF, 500 points; DTLZ2 Das–Dennis, 91 points). `fidelity.py` does not call that script. See `docs/fidelity_hooks.md`.
+
+### Classical continuous U-NSGA-III
+
+`unsga3_extropic.classical` is a generational U-NSGA-III on the same continuous boxes: population size N, Das–Dennis directions at partitions 12 (ZDT H=13 with pop 52, DTLZ2 H=91 with pop 92), non-dominated ranking, perpendicular association, and the PymooCompatible tournament (a shared niche keeps the better rank, then the closer point). Variation is SBX (η=30, p_c=1) and polynomial mutation (η=20, p_m=1/n). Objective calls are `pop * gens` (ZDT1 5200, ZDT2 13000, DTLZ2 13800), seeds 1–15.
+
+This path is NumPy. It does not sample an Ising or Potts energy, it does not call THRML, and `WeightSweepLoop` does not import it. The ExactEw column in `benchmarks/ORACLE_RESULTS.md` stays the weight-sweep measurement. The classical medians are in `benchmarks/ORACLE_UNSGA3_RESULTS.md`. IGD there is `fidelity.inverted_generational_distance`: the mean Euclidean distance from each reference-front point to the nearest obtained point, on the analytic 500-point ZDT curves and the 91-point L2 Das–Dennis DTLZ2 sphere.
+
+```bash
+python benchmarks/run_classical_unsga3.py
+```
 
 ### Torx PSWAP (optional)
 

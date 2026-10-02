@@ -35,6 +35,10 @@ python benchmarks/append_run.py --smoke --out benchmarks/records/runs.jsonl
 
 The optional Torx smoke (`demos/run_torx_pswap.py`, issue 7) reports a PSWAP stay/swap rate. That rate is not a minimization front, so the demo does not append a line here. The `torx` pytest is the record of that rate.
 
+## Classical continuous U-NSGA-III
+
+`benchmarks/run_classical_unsga3.py` runs NumPy U-NSGA-III on ZDT1, ZDT2, and DTLZ2 (seeds 1–15, Bend pop×gens). Front CSVs and `igd=` sidecars go under `records/classical_unsga3/`. The table is `ORACLE_UNSGA3_RESULTS.md`. IGD is the mean distance from each reference-front point to the nearest obtained point (`fidelity.inverted_generational_distance`). This runner does not call `WeightSweepLoop`, THRML, Bend, or pymoo. The ExactEw log and `ORACLE_RESULTS.md` stay the weight-sweep column.
+
 ## Smoke, default, and deep
 
 `notes` on new rows start with `profile=smoke`, `profile=default`, or `profile=deep`. Rows committed before that prefix are the CI smokes: codon `eval_budget` 24, Potts and domain wall `eval_budget` 16. The log is append-only, so those lines are not rewritten.
