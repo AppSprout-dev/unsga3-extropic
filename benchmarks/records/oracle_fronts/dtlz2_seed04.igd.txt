@@ -1,0 +1,7 @@
+igd=0.2731700136126506
+problem=dtlz2
+front_rows=119
+pf_rows=91
+pf_source=pymoo-das-dennis
+partitions=12
+front=/workspace/benchmarks/records/oracle_fronts/dtlz2_seed04.csv
