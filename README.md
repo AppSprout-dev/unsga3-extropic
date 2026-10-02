@@ -6,7 +6,7 @@ The outer loop samples one reference direction at a time, pools the candidates, 
 
 ## Extropic alignment
 
-[THRML](https://docs.thrml.ai) is Extropic's JAX library for block Gibbs sampling of energy-based models — the same factor-graph structure their hardware is built to accelerate. This repository uses that library for Ising problems, for a categorical Potts chain, and for a domain-wall Ising image of that chain. It also runs an optional Torx circuit when the `torx` extra is installed. That circuit is not the search step and is not a hardware runner. This repository does not ship Thermalizers.
+[THRML](https://docs.thrml.ai) is Extropic's JAX library for block Gibbs sampling of energy-based models — the same factor-graph structure their hardware is built to accelerate. This repository uses that library for Ising problems, for a categorical Potts chain, and for a domain-wall Ising image of that chain. It also runs an optional Torx circuit when the `torx` extra is installed. That circuit is not the search step and is not a hardware runner. This repository does not ship Thermalizers (2026-10-02 check: no public package or API).
 
 | Piece | Role |
 |-------|------|
@@ -76,7 +76,7 @@ tests/
 | Front harness (HV, GD, coverage, `.npy`/`.npz`) | implemented |
 | Benchmark JSONL records | implemented (`benchmarks/`) |
 | Torx `PSWAP` circuit | optional extra `torx` (`extro-torx`, Python ≥ 3.11), default off. Not the search loop |
-| Thermalizers / hardware | not implemented |
+| Thermalizers / hardware | not implemented (2026-10-02 check: no public package or API) |
 | Reference-direction niching | implemented (ideal–nadir normalization, perpendicular association, closer occupant). No crossover or mutation |
 | CI | GitHub Actions: core tests without the torx extra; a separate job runs the Torx smoke |
 
