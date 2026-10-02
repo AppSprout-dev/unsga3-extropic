@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "unsga3-extropic"
+version = "0.1.0"
+description = "U-NSGA-III on Extropic substrate (THRML / exact Ew Metropolis)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "AppSprout" }]
+keywords = ["unsga-iii", "multi-objective", "thrml", "extropic", "ising"]
+dependencies = [
+  "thrml>=0.1.4",
+  "numpy>=1.24",
+]
+# JAX is a peer dependency (THRML pattern). Install jax separately for your platform.
+
+[project.optional-dependencies]
+dev = ["matplotlib>=3.8", "pytest>=8.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/unsga3_extropic"]
+
+[tool.hatch.build]
+sources = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
