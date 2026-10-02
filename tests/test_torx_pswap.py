@@ -18,13 +18,12 @@ from unsga3_extropic.torx_circuit import (
     TorxPswapCircuit,
 )
 
-pytest.importorskip("torx")
-
 pytestmark = pytest.mark.torx
 
 
 def test_pswap_stay_and_swap_rates():
     """Docs quickstart: PSWAP on |10) with p(swap) = 0.3, 20_000 samples."""
+    pytest.importorskip("torx")
     draw = TorxPswapCircuit().sample(
         p_swap=DOCUMENTED_P_SWAP,
         n_samples=DOCUMENTED_N_SAMPLES,
