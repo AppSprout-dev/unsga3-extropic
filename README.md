@@ -2,7 +2,7 @@
 
 Weight-sweep multiobjective search on **THRML** Ising and Potts models, plus a NumPy exact-\(E_w\) Metropolis fallback. The Potts chain can also be sampled as a domain-wall Ising model inside THRML. That image is not a hardware run. An optional extra also runs one Torx circuit. That circuit is not the search step.
 
-The outer loop samples one reference direction at a time, pools the candidates, and ranks them. Survival keeps the closer occupant of each direction: ideal–nadir normalization, then perpendicular distance. Candidates still come only from that sampling step. Recombination and mutation are not part of `WeightSweepLoop`. A separate NumPy module, `unsga3_extropic.classical`, runs a generational U-NSGA-III (SBX and polynomial mutation) so continuous ZDT1, ZDT2, and DTLZ2 can be scored against published Bend/C# IGD. That column is not THRML and not Extropic sampling. The phased plan, drift guards, and definition of done are in [ROADMAP.md](ROADMAP.md).
+The outer loop samples one reference direction at a time, pools the candidates, and ranks them. Survival keeps the closer occupant of each direction: ideal–nadir normalization, then perpendicular distance. Candidates still come only from that sampling step. Recombination and mutation are not part of `WeightSweepLoop`. A separate NumPy module, `unsga3_extropic.classical`, runs a generational U-NSGA-III (SBX and polynomial mutation) so continuous ZDT1, ZDT2, and DTLZ2 can be scored against published Bend/C# IGD. That column is not THRML and not Extropic sampling. The phased plan, drift guards, and definition of done are in [ROADMAP.md](ROADMAP.md). Spike writeups use the denominator and the dominated archive in [docs/spikes/](docs/spikes/).
 
 ## Extropic alignment
 
@@ -70,6 +70,7 @@ demos/run_potts_thrml.py
 demos/run_domain_wall.py
 demos/run_torx_pswap.py # optional; needs the torx extra
 docs/fidelity_hooks.md
+docs/spikes/            # denominator, shipped, and dominated archive
 tests/
 .github/workflows/ci.yml
 ```

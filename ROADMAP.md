@@ -45,7 +45,7 @@ This repository's product is a **weight-sweep archive** with reference-direction
 
 ## Current state vs target
 
-State was checked at `7946bc1` / v0.1.1, then updated as phases landed. Phase 1, phase 2, phase 3, and phase 4 boxes below are checked against this tree (package 0.7.0). Appendix item 7, the domain-wall image, is also in this tree as a THRML simulation. Continuous ZDT1/ZDT2/DTLZ2 have two NumPy columns, neither of them THRML: the exact-\(E_w\) weight-sweep, and a classical generational U-NSGA-III fidelity column beside it.
+State was checked at `7946bc1` / v0.1.1, then updated as phases landed. Phase 1, phase 2, phase 3, and phase 4 boxes below are checked against this tree (package 0.7.0). Appendix item 7, the domain-wall image, is also in this tree as a THRML simulation. Continuous ZDT1/ZDT2/DTLZ2 have two NumPy columns, neither of them THRML: the exact-\(E_w\) weight-sweep, and a classical generational U-NSGA-III fidelity column beside it. Spike triage is a docs process under `docs/spikes/`. It is not another column and not a sampler.
 
 | Piece | Now | Target |
 |-------|-----|--------|
@@ -79,10 +79,11 @@ These are permanent, including inside a phase that sounds adjacent.
 9. **Hardware claims follow a public API.** Z1's published size, degree, and Ising/p-bit nature may be quoted with the blog URL. This repo does not flash weights, estimate joules, or speak for a cloud simulator unless a documented public endpoint is actually called.
 10. **p-mode / p-MoG / continuous EBMs** are out of scope until a concrete objective needs them. The open gap is categorical Potts, which the docs already sample.
 11. **Reproducing [extropic-ai/codon_opt](https://github.com/extropic-ai/codon_opt)** (SARS-CoV-2 spike, domain-wall compilation at protein scale) is not required for any phase below. Link it. Do not absorb it.
+12. **Spike triage names claims.** A spike that ships in the README has a filled [denominator](docs/spikes/denominator.md) and a checkable artifact. A spike that loses or overclaims is filed under `docs/spikes/dominated/` and is not deleted. That archive does not put SBX or polynomial mutation into `WeightSweepLoop`. The classical column stays separate fidelity.
 
 ## Phased work
 
-Phases 1–3 are the algorithm. Phase 2 can start on NumPy archives before phase 1 merges. Phase 4 is optional and after phase 1's backend protocol is stable. Phase 5 is a watch, not a coding phase. Phase 6 waits on phases 1–3 and on a public device API.
+Phases 1–3 are the algorithm. Phase 2 can start on NumPy archives before phase 1 merges. Phase 4 is optional and after phase 1's backend protocol is stable. Spike triage is a docs/process phase after phases 1–3 and optional Torx. It is not a sampler, and it does not take a number from phase 5 or phase 6. Phase 5 is a watch, not a coding phase. Phase 6 waits on phases 1–3 and on a public device API.
 
 ### Phase 1 — Potts / categorical THRML backend
 
@@ -158,6 +159,18 @@ Torx on this check is `extro-torx` 0.0.2, Python ≥ 3.11 ([getting started](htt
 - [x] One smoke: build a two-site circuit from a documented gate (`PSWAP` or `PNOT` / `PCNOT` as in the Torx README), sample, and check the empirical stay/swap or bit-flip rate against the gate parameter within a loose tolerance at a documented sample count.
 - [x] README calls this path Torx, not THRML, not Thermalizers, and not hardware.
 - [x] No code path turns a Torx circuit into an `IsingEBM` or a `CategoricalEBMFactor`. That mapping is Thermalizers' unpublished job.
+
+### Spike triage — denominator and dominated archive
+
+**Outcome.** Every spike writeup has a denominator, and a spike that does not ship is kept. The shape is attempt, then a multi-objective filter, then ship the winners. This phase adds no sampler. It sits after phases 1–3 and optional Torx. Filed as issue #20.
+
+The template is [docs/spikes/denominator.md](docs/spikes/denominator.md). The index is [docs/spikes/README.md](docs/spikes/README.md). Shipped notes go in `docs/spikes/shipped/`. Filtered notes go in `docs/spikes/dominated/`.
+
+**Acceptance criteria.**
+
+- [x] `docs/spikes/denominator.md` exists. A writeup fills attempted, filtered, shipped, and `proof_surface_pct` (0–100); a compute proxy (`eval_budget`, `pop_x_gens`, or `wall_seconds_local`) with `proxy_value` and `proxy_artifact`; `backend_label` (`THRML-native`, `NumPy ExactEw`, `classical fidelity`, `Torx optional`, or `watch-only`), `energy_identity` (`yes`, `n/a`, or `fail`), and `import_graph_matches_readme`; `not_claimed` and `dominated_path`. AGMAI `model_name` and `prompts` stay `N/A` unless that spike recorded them. `fail_list_shipped` is `yes` or `no`.
+- [x] The index lists active, shipped, and dominated spikes and uses the labels `dominated:igd`, `dominated:claim`, `refused:thermalizers`, `refused:sbx-in-loop`, `watch:not_triggered`, and `still_true`. The continuous ExactEw weight-sweep is the first dominated card (`dominated:igd`). Its numbers stay in [benchmarks/ORACLE_RESULTS.md](benchmarks/ORACLE_RESULTS.md). The classical fidelity column stays [benchmarks/ORACLE_UNSGA3_RESULTS.md](benchmarks/ORACLE_UNSGA3_RESULTS.md).
+- [x] A README claim that a spike shipped names the filled denominator and a checkable artifact. A claim without both does not ship. This phase does not put SBX or polynomial mutation into `WeightSweepLoop`.
 
 ### Phase 5 — Thermalizers watch
 
@@ -275,6 +288,8 @@ Optional, after child 1. This is the p-bit compilation path in [example 03](http
 - [x] A test shows decoded categorical states reproduce the Potts objectives on a toy chain. Invalid thermometers are counted, not silently scored as feasible.
 - [x] Does not vendor `codon_opt` and does not claim Z1 execution (that is child 6).
 
+**Spike triage (not a sampler child).** Filed as issue #20. Docs only: the denominator template, the dominated archive, and the ExactEw honesty card. Acceptance is the Spike triage section above.
+
 ## Sources
 
 Checked 2026-10-02.
@@ -304,3 +319,4 @@ Checked 2026-10-02.
 | Torx, Thermalizers, Z1 announcement | https://extropic.ai/writing/from-one-to-one-billion/ |
 | U-NSGA-III (Seada and Deb) | https://www.egr.msu.edu/~kdeb/papers/c2014022.pdf |
 | This repo's current behavior | [README.md](README.md), [docs/fidelity_hooks.md](docs/fidelity_hooks.md) |
+| Spike denominator and dominated archive | [docs/spikes/denominator.md](docs/spikes/denominator.md), [docs/spikes/README.md](docs/spikes/README.md) |
