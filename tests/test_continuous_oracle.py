@@ -214,3 +214,34 @@ def test_report_copies_igd_text_and_labels_numpy():
     assert "0.061603" in text
     assert "0.097733" in text
     assert "analytic-zdt1 n=500" in text
+
+
+def test_regenerated_report_keeps_exactew_dominated_pointer():
+    """A rewrite of ORACLE_RESULTS.md must still point at the ExactEw card."""
+    report = _oracle_report()
+    row = report.OracleIgdRow(
+        problem="dtlz2",
+        seed=1,
+        igd_text="0.27690988609911626",
+        front_rows="10",
+        pf_rows="91",
+        pf_source="pymoo-das-dennis",
+        objective_evals=13741,
+        recorded_samples=12285,
+        nd_count=10,
+    )
+    text = report.render_oracle_results(
+        [row],
+        generated_at="2026-10-02T18:49:22Z",
+        git_sha="3db013e7cc4a3cf1b9cdda29bcd2219a32b7ee2f",
+        partial=True,
+    )
+    card = "docs/spikes/dominated/2026-10-07-exactew-continuous-not-unsga3.md"
+    pointer = (
+        "These ExactEw numbers stay in this file; the dominated-spike card is "
+        f"[{card}](../{card})."
+    )
+    assert pointer in text
+    assert pointer == report.EXACTEW_DOMINATED_POINTER
+    committed = (ROOT / "benchmarks" / "ORACLE_RESULTS.md").read_text(encoding="utf-8")
+    assert pointer in committed

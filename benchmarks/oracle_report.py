@@ -16,6 +16,16 @@ from published_multiseed import PUBLISHED_IGD, PUBLISHED_MEDIANS, PUBLISHED_SOUR
 
 ProblemName = OracleName
 
+# Lives in the template. ``render_oracle_results`` rewrites
+# ``benchmarks/ORACLE_RESULTS.md``, so a hand edit of that file does not survive.
+EXACTEW_DOMINATED_CARD = (
+    "docs/spikes/dominated/2026-10-07-exactew-continuous-not-unsga3.md"
+)
+EXACTEW_DOMINATED_POINTER = (
+    "These ExactEw numbers stay in this file; the dominated-spike card is "
+    f"[{EXACTEW_DOMINATED_CARD}](../{EXACTEW_DOMINATED_CARD})."
+)
+
 
 def _unreachable(name: Never) -> Never:
     raise AssertionError(f"unhandled oracle problem {name!r}")
@@ -217,6 +227,8 @@ def render_oracle_results(
             "## Reading the Extropic column",
             "",
             "A larger IGD is farther from the analytic front. This sampler does not share Bend's SBX, polynomial mutation, or population. Matching `pop * gens` spends a similar number of objective calls; it does not reproduce the U-NSGA-III trajectory. `Extropic n` is `front_rows` from the IGD script (unique non-dominated rows), which is not forced to equal the Bend population.",
+            "",
+            EXACTEW_DOMINATED_POINTER,
             "",
         ]
     )
