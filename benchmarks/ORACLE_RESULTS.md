@@ -104,3 +104,5 @@ Seeds scored: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15. Extropic median
 ## Reading the Extropic column
 
 A larger IGD is farther from the analytic front. This sampler does not share Bend's SBX, polynomial mutation, or population. Matching `pop * gens` spends a similar number of objective calls; it does not reproduce the U-NSGA-III trajectory. `Extropic n` is `front_rows` from the IGD script (unique non-dominated rows), which is not forced to equal the Bend population.
+
+These ExactEw numbers stay in this file; the dominated-spike card is [docs/spikes/dominated/2026-10-07-exactew-continuous-not-unsga3.md](../docs/spikes/dominated/2026-10-07-exactew-continuous-not-unsga3.md).
