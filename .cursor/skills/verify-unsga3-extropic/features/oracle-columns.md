@@ -18,7 +18,7 @@ Two benchmark CLIs score continuous ZDT1 (n=30), ZDT2 (n=30), and DTLZ2 (M=3, k=
 
 Preconditions:
 
-- Doctor shows `pymoo:` with a version and `bend:` pointing at a checkout containing `ab/igd_vs_pymoo.py`.
+- Doctor shows `pymoo:` with a version. `bend:` either names the pinned private clone, says one will be cloned (network needed), or names an explicit `UNSGA3_BEND_ROOT`.
 
 - **Classical.** `$V drive classical`. Three `classical_*_s1` steps end `rc=0`; Seed-1 lines: `zdt1 seed 1: igd=0.05827076935009233 front_rows=52 evals=5200`, `zdt2 seed 1: igd=0.01703131322864674 front_rows=52 evals=13000`, `dtlz2 seed 1: igd=0.003679800984466357 front_rows=92 evals=13800`. `SUMMARY.txt` says `classical fronts byte-identical to committed`.
 - **Oracle.** `$V drive oracle`. Three `oracle_*_s1` steps end `rc=0`; Seed-1 lines: `scored zdt1 seed 1 igd=2.573954812980915 pf_rows=500`, `scored zdt2 seed 1 igd=2.800481960915036 pf_rows=500`, `scored dtlz2 seed 1 igd=0.22501888314606172 pf_rows=91`. `SUMMARY.txt` says `oracle seed-1 IGD and fronts identical to committed`.
@@ -26,6 +26,7 @@ Preconditions:
 
 ## Gotchas
 
+- Called directly without `UNSGA3_BEND_ROOT`, `run_oracle_continuous.py` falls back to `/workspace/unsga3-bend`, a shared box checkout on whatever branch another agent left it. Go through `$V drive oracle`, which always passes the pinned clone explicitly (`oracle_bend.txt` records which).
 - Without pymoo, Bend's script exits 0 and prints `skip: pymoo is not installed` to stderr; `run_oracle_continuous.py` then raises `igd_vs_pymoo.py did not print igd=`. Install pymoo in the venv (`$V launch` does).
 - Both CLIs always write front CSVs/sidecars into the tracked `benchmarks/records/` dirs; there is no flag to redirect them. The harness diffs then restores them.
 - Oracle `igd.txt` sidecars embed `front=<absolute path of the checkout that scored them>`, so any rerun in a different directory shows a one-line diff. Ignore that line; compare `igd=` and the CSV.

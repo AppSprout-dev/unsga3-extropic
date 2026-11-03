@@ -9,13 +9,14 @@
 # Env:
 #   VERIFY_VENV      venv path            (default: <repo>/.venv)
 #   VERIFY_EVIDENCE  evidence directory   (default: <repo>/.verify-evidence/<UTC stamp>)
-#   UNSGA3_BEND_ROOT checkout of AppSprout-dev/unsga3-bend (oracle journey only)
+#   UNSGA3_BEND_ROOT use this unsga3-bend checkout as-is (read only; never fetched or switched)
+#   VERIFY_BEND_SHA  pinned unsga3-bend commit for the private clone (default below)
+#   VERIFY_BEND_DIR  where that private clone lives (default: /tmp/unsga3-bend-<sha12>)
 set -uo pipefail
 
 REPO="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 VENV="${VERIFY_VENV:-$REPO/.venv}"
 STATE="$REPO/.verify-evidence/.state"
-mkdir -p "$STATE"
 if [[ -z "${VERIFY_EVIDENCE:-}" ]]; then
   if [[ -f "$STATE/current" ]]; then VERIFY_EVIDENCE="$(cat "$STATE/current")"
   else VERIFY_EVIDENCE="$REPO/.verify-evidence/$(date -u +%Y%m%dT%H%M%SZ)"; fi
@@ -26,6 +27,11 @@ export JAX_PLATFORMS=cpu
 # Tracked files the CLIs write by default. Drives redirect what they can;
 # these are the ones they cannot (see features/*.md Gotchas).
 TOUCHED=(benchmarks/records/runs.jsonl benchmarks/records/oracle_fronts benchmarks/records/classical_unsga3)
+
+# unsga3-bend commit whose ab/igd_vs_pymoo.py reproduced the committed oracle IGDs.
+BEND_URL="https://github.com/AppSprout-dev/unsga3-bend.git"
+BEND_SHA="${VERIFY_BEND_SHA:-d68ae5ea3764bc49998b5b79f8397b07b42d4958}"
+BEND_DIR="${VERIFY_BEND_DIR:-/tmp/unsga3-bend-${BEND_SHA:0:12}}"
 
 die() { echo "verify: $*" >&2; exit 1; }
 py() { "$VENV/bin/python" "$@"; }
@@ -43,18 +49,66 @@ step() {
   return $rc
 }
 
-guard_clean() {
-  # Refuse to drive on top of uncommitted record edits: cleanup restores these
-  # paths with git, which would destroy someone's real benchmark rows.
-  local dirty
-  dirty="$(git -C "$REPO" status --porcelain -- "${TOUCHED[@]}")"
-  if [[ -n "$dirty" && ! -f "$STATE/started_clean" ]]; then
-    echo "$dirty" >&2
-    die "tracked benchmark records are already modified; commit or move them before driving"
+# Fingerprint of the tracked record paths: porcelain status, the binary diff
+# against HEAD, and the bytes of any untracked files under them.
+records_fingerprint() {
+  {
+    git -C "$REPO" status --porcelain --untracked-files=all -- "${TOUCHED[@]}"
+    git -C "$REPO" diff --binary HEAD -- "${TOUCHED[@]}"
+    git -C "$REPO" ls-files -z --others --exclude-standard -- "${TOUCHED[@]}" \
+      | (cd "$REPO" && xargs -0 -r sha256sum)
+  } | sha256sum | cut -d' ' -f1
+}
+
+snapshot_records() { records_fingerprint > "$STATE/records.sha256"; }
+
+# Refuse unless the records match the snapshot taken when this run started
+# (clean HEAD) or at the end of its previous drive. Any other change is
+# someone's edit, and cleanup's git checkout would destroy it.
+check_snapshot() {
+  local want have
+  want="$(cat "$STATE/records.sha256")"; have="$(records_fingerprint)"
+  if [[ "$want" != "$have" ]]; then
+    git -C "$REPO" status --porcelain --untracked-files=all -- "${TOUCHED[@]}" >&2
+    die "tracked benchmark records changed since this run's last snapshot (hand edit or another run?); refusing. Inspect them, then move them aside or rm -rf '$STATE' to abandon this run."
   fi
-  touch "$STATE/started_clean"
-  echo "$EVID" > "$STATE/current"
+}
+
+guard_clean() {
+  mkdir -p "$STATE"
+  if [[ ! -f "$STATE/records.sha256" ]]; then
+    # Run start: records must be clean so cleanup can restore them with git.
+    local dirty
+    dirty="$(git -C "$REPO" status --porcelain --untracked-files=all -- "${TOUCHED[@]}")"
+    if [[ -n "$dirty" ]]; then
+      echo "$dirty" >&2
+      die "tracked benchmark records are already modified; commit or move them before driving"
+    fi
+    snapshot_records
+    echo "$EVID" > "$STATE/current"
+  else
+    check_snapshot
+  fi
   mkdir -p "$EVID"
+}
+
+# Resolve the unsga3-bend checkout for the oracle journey. An explicit
+# UNSGA3_BEND_ROOT is used read-only. Otherwise use a private clone at the
+# pinned SHA, created atomically; an existing one at another SHA is refused.
+ensure_bend() {
+  if [[ -n "${UNSGA3_BEND_ROOT:-}" ]]; then
+    [[ -f "$UNSGA3_BEND_ROOT/ab/igd_vs_pymoo.py" ]] || die "UNSGA3_BEND_ROOT=$UNSGA3_BEND_ROOT has no ab/igd_vs_pymoo.py"
+    echo "$UNSGA3_BEND_ROOT"; return 0
+  fi
+  if [[ ! -d "$BEND_DIR/.git" ]]; then
+    local tmp; tmp="$(mktemp -d "${BEND_DIR}.tmp.XXXXXX")" || die "mktemp failed"
+    git clone -q "$BEND_URL" "$tmp" >&2 && git -C "$tmp" -c advice.detachedHead=false checkout -q "$BEND_SHA" >&2 \
+      || { rm -rf "$tmp"; die "could not clone $BEND_URL at $BEND_SHA"; }
+    mv -T "$tmp" "$BEND_DIR" 2>/dev/null || rm -rf "$tmp"   # lost a race: keep the winner
+  fi
+  local head; head="$(git -C "$BEND_DIR" rev-parse HEAD 2>/dev/null)"
+  [[ "$head" == "$BEND_SHA" ]] || die "$BEND_DIR is at ${head:-?}, not pinned $BEND_SHA; remove it or set VERIFY_BEND_DIR"
+  echo "$BEND_DIR"
 }
 
 cmd_launch() {
@@ -93,8 +147,18 @@ for mod, why in (("torx", "torx journey"), ("pymoo", "oracle journey")):
 import jax
 print("jax dev: ", jax.devices())
 PY
-  local bend="${UNSGA3_BEND_ROOT:-/workspace/unsga3-bend}"
-  if [[ -f "$bend/ab/igd_vs_pymoo.py" ]]; then echo "bend:     $bend"; else echo "bend:     missing ($bend/ab/igd_vs_pymoo.py; oracle journey will fail)"; fi
+  if [[ -n "${UNSGA3_BEND_ROOT:-}" ]]; then
+    if [[ -f "$UNSGA3_BEND_ROOT/ab/igd_vs_pymoo.py" ]]; then echo "bend:     $UNSGA3_BEND_ROOT (UNSGA3_BEND_ROOT, used read-only)"
+    else echo "bend:     UNSGA3_BEND_ROOT=$UNSGA3_BEND_ROOT has no ab/igd_vs_pymoo.py (oracle journey will fail)"; fi
+  elif [[ "$(git -C "$BEND_DIR" rev-parse HEAD 2>/dev/null)" == "$BEND_SHA" ]]; then
+    echo "bend:     $BEND_DIR at pinned ${BEND_SHA:0:12}"
+  else
+    echo "bend:     no private clone yet; drive oracle will clone $BEND_URL at ${BEND_SHA:0:12} into $BEND_DIR"
+  fi
+  if [[ -f "$STATE/records.sha256" ]]; then
+    if [[ "$(records_fingerprint)" == "$(cat "$STATE/records.sha256")" ]]; then echo "snapshot: run in progress, records match last snapshot"
+    else echo "snapshot: run in progress, records DIFFER from last snapshot (next drive and cleanup will refuse)"; fi
+  fi
   local dirty; dirty="$(git -C "$REPO" status --porcelain -- "${TOUCHED[@]}")"
   if [[ -n "$dirty" ]]; then echo "records:  MODIFIED"; echo "$dirty"; else echo "records:  clean"; fi
   [[ $ok -eq 0 ]] && echo "DOCTOR OK" || echo "DOCTOR FAIL"
@@ -142,9 +206,12 @@ drive_classical() {
 }
 
 drive_oracle() {
-  local rc=0 p
+  local rc=0 p bend
+  bend="$(ensure_bend)" || return 1
+  echo "bend=$bend" > "$EVID/oracle_bend.txt"
+  git -C "$bend" rev-parse HEAD >> "$EVID/oracle_bend.txt"
   for p in zdt1 zdt2 dtlz2; do
-    step "oracle_${p}_s1" py benchmarks/run_oracle_continuous.py --problems "$p" --seeds 1 --log "$EVID/oracle_runs.jsonl" --report "$EVID/oracle_${p}_s1.md" || rc=1
+    step "oracle_${p}_s1" env UNSGA3_BEND_ROOT="$bend" "$VENV/bin/python" benchmarks/run_oracle_continuous.py --problems "$p" --seeds 1 --log "$EVID/oracle_runs.jsonl" --report "$EVID/oracle_${p}_s1.md" || rc=1
   done
   # Compare only the igd= value and the CSV; the sidecar's front= line is an absolute path.
   git -C "$REPO" diff -U0 -- benchmarks/records/oracle_fronts > "$EVID/oracle_diff.txt"
@@ -158,13 +225,14 @@ drive_records() {
   local rc=0
   step records_stub  py benchmarks/append_run.py --stub  --out "$EVID/records/runs.jsonl" || rc=1
   step records_smoke py benchmarks/append_run.py --smoke --out "$EVID/records/runs.jsonl" || rc=1
-  step records_validate py -c "
-import sys; sys.path.insert(0, 'src')
+  # The path goes in argv, never into the Python source.
+  step records_validate py -c '
+import sys; sys.path.insert(0, "src")
 from unsga3_extropic.results import read_run_records, validate_run_record
-rows = read_run_records('$EVID/records/runs.jsonl')
+rows = read_run_records(sys.argv[1])
 for r in rows: validate_run_record(r)
-assert [r['backend'] for r in rows] == ['none', 'thrml_potts'], rows
-print('validated', len(rows), 'rows')" || rc=1
+assert [r["backend"] for r in rows] == ["none", "thrml_potts"], rows
+print("validated", len(rows), "rows")' "$EVID/records/runs.jsonl" || rc=1
   return $rc
 }
 
@@ -183,12 +251,14 @@ cmd_drive() {
     *) die "unknown journey $j" ;;
   esac
   local rc=$?
+  snapshot_records   # this drive's own writes become the new baseline
   echo "evidence: $EVID"
   return $rc
 }
 
 cmd_cleanup() {
-  if [[ -f "$STATE/started_clean" ]]; then
+  if [[ -f "$STATE/records.sha256" ]]; then
+    check_snapshot
     git -C "$REPO" checkout -- "${TOUCHED[@]}"
     git -C "$REPO" clean -fdq -- benchmarks/records/oracle_fronts benchmarks/records/classical_unsga3
     rm -rf "$REPO/demos/_out"
