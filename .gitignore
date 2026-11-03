@@ -12,3 +12,5 @@ benchmarks/**/artifacts/
 # Sibling checkout used only to score fronts. Not part of this package.
 unsga3-bend/
 .DS_Store
+# Verification harness evidence (.cursor/skills/verify-unsga3-extropic)
+.verify-evidence/
