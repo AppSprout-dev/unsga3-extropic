@@ -36,7 +36,7 @@ Ready when it prints `READY venv=<path>`. CI uses Python 3.12; `extro-torx` need
 $V doctor     # read-only; exit 0 and "DOCTOR OK" means worth driving
 ```
 
-It checks: HEAD SHA and branch; venv exists; `unsga3_extropic` imports from **this** checkout (an editable install from another clone on the same box is the classic false pass); thrml/jax/numpy/pytest versions; torx and pymoo presence; the unsga3-bend IGD script (`$UNSGA3_BEND_ROOT` or `/workspace/unsga3-bend`); whether tracked benchmark records are already modified. Run it first and whenever a result looks off.
+It checks: HEAD SHA and branch; venv exists; `unsga3_extropic` imports from **this** checkout (an editable install from another clone on the same box is the classic false pass); thrml/jax/numpy/pytest versions; torx and pymoo presence; which unsga3-bend checkout the oracle journey will use (see Bend below); whether tracked benchmark records are already modified; and, mid-run, whether they still match the run's last snapshot. Doctor writes nothing. Run it first and whenever a result looks off.
 
 ## Drive
 
@@ -50,7 +50,20 @@ $V drive records     # append_run --stub/--smoke into evidence, schema-validated
 $V drive deep-codon  # run_deep.py --only codon --only exact_ew --skip-torx (~3 min CPU), redirected into evidence
 ```
 
-Exit code is non-zero if any step failed. `drive` refuses to start if `benchmarks/records/{runs.jsonl,oracle_fronts,classical_unsga3}` already have uncommitted changes, because cleanup restores them with git. Multiple drives in one session share one evidence dir until `cleanup`.
+Exit code is non-zero if any step failed. Multiple drives in one session share one evidence dir until `cleanup`.
+
+Records snapshot (`benchmarks/records/{runs.jsonl,oracle_fronts,classical_unsga3}`, which cleanup restores with git):
+- The first `drive` of a run refuses unless those paths are clean, then writes a fingerprint (porcelain status, binary diff against HEAD, and hashes of untracked files) to `.verify-evidence/.state/records.sha256`.
+- Each `drive` ends by re-snapshotting, so the harness's own writes become the new baseline.
+- Every later `drive`, and `cleanup`, recomputes the fingerprint and refuses with `changed since this run's last snapshot` if it differs. A hand edit or another run's write between drives is never reverted.
+- To recover: inspect the edit, move it aside (or commit it), then either restore the records to the harness state or abandon the run with `rm -rf .verify-evidence/.state` and restore by hand.
+
+### Bend
+
+The oracle journey needs unsga3-bend's `ab/igd_vs_pymoo.py`. It never uses a shared checkout implicitly:
+- If `UNSGA3_BEND_ROOT` is set, that checkout is used read-only (never fetched, checked out, or switched).
+- Otherwise `drive oracle` clones `https://github.com/AppSprout-dev/unsga3-bend.git` into a private dir, `VERIFY_BEND_DIR` (default `/tmp/unsga3-bend-<sha12>`), and checks out the pinned `VERIFY_BEND_SHA` (default `d68ae5ea3764bc49998b5b79f8397b07b42d4958`, the commit that reproduced the committed oracle IGDs). The clone is made in a temp dir and renamed into place, so concurrent runs cannot half-share it. An existing dir at any other SHA is refused rather than switched.
+- The path and SHA used go to `oracle_bend.txt` in the evidence dir. Bump the pin only together with re-proving the oracle numbers in `features/oracle-columns.md`.
 
 Isolation: two runs in the same checkout collide on `benchmarks/records/runs.jsonl`, `demos/_out/`, and the tracked front CSVs. Use a separate clone or `git worktree` per concurrent run (on the shared box, create it under the `shared-box-lock` rules). JAX on CPU is process-local, so parallel clones are fine.
 
@@ -62,16 +75,24 @@ Proof standards:
 - Drive the CLIs a user runs, not internal functions. Pytest is CI parity, not a substitute for a journey.
 - Prove the action and the end state: the printed metrics **and** the files the CLI writes (front `.npz`/CSV, JSONL rows, report markdown).
 - Side effects are part of the proof: demos append one row each to the tracked `runs.jsonl` (check the numstat), and benchmark CLIs rewrite tracked front CSVs. A rerun at the same SHA must reproduce committed fronts byte for byte (classical) or by `igd=` value (oracle).
-- No mocks. THRML, Torx, and pymoo run for real on CPU. The only external boundary is unsga3-bend's IGD script, which is run as-is.
+- No mocks. THRML, Torx, and pymoo run for real on CPU. The only external boundary is unsga3-bend's IGD script, run as-is from the pinned private clone (or an explicit `UNSGA3_BEND_ROOT`).
 - Report the date, SHA, Python/JAX/THRML versions (from doctor), and each step's `rc`.
 
 ## Cleanup
 
 ```bash
-$V cleanup    # git checkout the tracked record paths, remove demos/_out, drop .verify-evidence/.state
+$V cleanup    # re-check the snapshot, git checkout the tracked record paths, remove demos/_out, drop .verify-evidence/.state
 ```
 
 It only restores paths when this harness's `drive` started from a clean records state, and never deletes the evidence dir; it lists what it kept. There are no background processes to kill.
+
+## Harness self-test
+
+```bash
+.cursor/skills/verify-unsga3-extropic/scripts/test_verify.sh   # ~1 min; prints PASS/FAIL lines, ends ALL PASS
+```
+
+It works in a throwaway clone under `$TMPDIR` with a private Bend dir. It checks three things. First, that a hand edit or a stray untracked file between drives makes both the next drive and cleanup refuse, with the edit left in place. Second, that `records_validate` passes when the evidence path contains `'`, `"` and a space. Third, that `drive oracle` with no `UNSGA3_BEND_ROOT` uses the private clone at the pinned SHA, leaves `/workspace/unsga3-bend` untouched, and refuses a clone that is off the pin. Run it after any edit to `verify.sh`.
 
 ## Feature map
 
