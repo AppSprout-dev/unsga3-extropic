@@ -133,6 +133,7 @@ def _nonfinite_cases():
         np.array([[-np.inf, 1.0], [0.0, 0.0], [1.0, -np.inf]]),
         np.array([[np.nan, np.inf], [0.5, 0.5], [np.inf, np.nan], [0.0, 1.0]]),
         np.array([[0.0, 0.0, np.nan], [1.0, 1.0, 1.0], [0.1, 0.1, 0.1]]),
+        np.array([[1.0, 2.0], [0.0, np.nan], [0.5, 0.5], [np.nan, np.nan]]),
     ]
 
 
@@ -163,12 +164,21 @@ def test_nonfinite_matches_loop():
                 )
 
 
-def test_loop_backend_is_archive_scan():
-    """``backend='loop'`` must call the archive scan, not a second copy."""
-    import inspect
-
+def test_loop_backend_calls_archive_scan(monkeypatch):
+    """``kernels.nondominated_mask_loop`` must call the archive scan once."""
+    import unsga3_extropic.archive as archive
     from unsga3_extropic.kernels.nondominated import nondominated_mask_loop
 
-    source = inspect.getsource(nondominated_mask_loop)
-    assert "_nondominated_mask_loop" in source
-    assert "np.all" not in source
+    calls: list[tuple[np.ndarray, bool]] = []
+    original = archive._nondominated_mask_loop
+
+    def wrapped(objs, *, minimize=True):
+        calls.append((np.asarray(objs), bool(minimize)))
+        return original(objs, minimize=minimize)
+
+    monkeypatch.setattr(archive, "_nondominated_mask_loop", wrapped)
+    objs = np.array([[0.0, 1.0], [0.6, 0.6], [1.0, 0.0]])
+    got = nondominated_mask_loop(objs, minimize=True)
+    assert len(calls) == 1
+    assert calls[0][1] is True
+    assert np.array_equal(got, original(objs, minimize=True))
