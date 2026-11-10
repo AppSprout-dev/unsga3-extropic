@@ -68,7 +68,7 @@ mask = nondominated_mask(objectives, backend="jit")   # Numba, optional extra
 | `jit_parallel` | Numba | same test, `prange` over candidates; helps dense fronts, can add overhead on typical mixed clouds |
 | `cuda` | a CUDA device and Numba CUDA or CuPy | same test as `ND_MASK_CUDA_SOURCE`; tests skip when no GPU is present |
 
-Correctness is exact: every backend must produce the same boolean mask as `loop`, including the `1e-12` slack and maximization. GPU tests are marked `gpu` and skipped without a device. Existing CI checks are not disabled or loosened.
+Correctness is exact: every backend must produce the same boolean mask as `loop`, including the `1e-12` slack, maximization, and IEEE NaN/inf behavior of the NumPy comparisons (a NaN row does not dominate a finite row). GPU tests are marked `gpu` and skipped without a device. CI installs the `kernels` extra so the jit equivalence tests run; existing checks are not disabled or loosened.
 
 ## Before / after
 

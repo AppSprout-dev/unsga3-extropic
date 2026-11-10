@@ -17,8 +17,12 @@ a GPU kernel (Numba CUDA, or CuPy ``RawKernel`` using
 ``ND_MASK_CUDA_SOURCE``). It is skipped when no device is present.
 
 Dominance matches ``archive.nondominated_mask`` exactly, including the
-``1e-12`` slack. No backend is used unless the caller passes ``backend``
-or sets ``UNSGA3_ND_BACKEND``.
+``1e-12`` slack and IEEE NaN/inf behavior of the NumPy comparisons
+(a non-finite coordinate fails ``<=`` / ``<``, so a NaN row does not
+dominate a finite row, and a finite row does not dominate a NaN row).
+No backend is used unless the caller passes ``backend`` or sets
+``UNSGA3_ND_BACKEND``. The ``loop`` backend calls the canonical scan in
+``archive``; it does not keep a second copy of that scan.
 """
 
 from __future__ import annotations
@@ -50,7 +54,8 @@ void nd_mask(const double* objs, unsigned char* keep, int n, int m, int minimize
         for (int k = 0; k < m; ++k) {
             const double a = sign * fj[k];
             const double b = sign * fi[k];
-            if (a > b + 1e-12) {
+            /* Match NumPy a <= b+eps. a > b+eps is wrong for NaN. */
+            if (!(a <= b + 1e-12)) {
                 all_le = false;
                 break;
             }
@@ -129,24 +134,14 @@ def _require_2d(objs: np.ndarray) -> np.ndarray:
 
 
 def nondominated_mask_loop(objs: np.ndarray, *, minimize: bool = True) -> np.ndarray:
-    """Original per-row NumPy scan. Kept here so tests can call it directly."""
-    rows = _require_2d(objs)
-    n = len(rows)
-    keep = np.ones(n, dtype=bool)
-    for i in range(n):
-        if not keep[i]:
-            continue
-        if minimize:
-            dom = np.all(rows <= rows[i] + _EPS, axis=1) & np.any(
-                rows < rows[i] - _EPS, axis=1
-            )
-        else:
-            dom = np.all(rows >= rows[i] - _EPS, axis=1) & np.any(
-                rows > rows[i] + _EPS, axis=1
-            )
-        if np.any(dom):
-            keep[i] = False
-    return keep
+    """Canonical per-row scan from ``archive._nondominated_mask_loop``.
+
+    This wrapper only validates shape. It does not reimplement dominance,
+    so the default path and ``backend='loop'`` cannot drift.
+    """
+    from unsga3_extropic.archive import _nondominated_mask_loop
+
+    return _nondominated_mask_loop(_require_2d(objs), minimize=minimize)
 
 
 def nondominated_mask_tiled(
@@ -194,7 +189,11 @@ def _numba_kernels():
                 for k in range(m):
                     a = sign * objs[j, k]
                     b = sign * objs[i, k]
-                    if a > b + _EPS:
+                    # Match NumPy ``a <= b + eps``. ``a > b + eps`` is not
+                    # equivalent when a or b is NaN: NaN > x is False, so the
+                    # old test left all_le True and a NaN row could dominate
+                    # a finite row. ``not (a <= b + eps)`` is True for NaN.
+                    if not (a <= b + _EPS):
                         all_le = False
                         break
                     if a < b - _EPS:
@@ -218,7 +217,11 @@ def _numba_kernels():
                 for k in range(m):
                     a = sign * objs[j, k]
                     b = sign * objs[i, k]
-                    if a > b + _EPS:
+                    # Match NumPy ``a <= b + eps``. ``a > b + eps`` is not
+                    # equivalent when a or b is NaN: NaN > x is False, so the
+                    # old test left all_le True and a NaN row could dominate
+                    # a finite row. ``not (a <= b + eps)`` is True for NaN.
+                    if not (a <= b + _EPS):
                         all_le = False
                         break
                     if a < b - _EPS:
@@ -264,7 +267,7 @@ def _load_cuda_kernel():
                     for k in range(m):
                         a = sign * objs[j, k]
                         b = sign * objs[i, k]
-                        if a > b + _EPS:
+                        if not (a <= b + _EPS):
                             all_le = False
                             break
                         if a < b - _EPS:
