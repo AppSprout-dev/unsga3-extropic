@@ -43,6 +43,8 @@ README.md
 ROADMAP.md
 src/unsga3_extropic/
   archive.py            # ND archive, ideal–nadir niching, 2-D hypervolume helper
+  kernels/
+    nondominated.py     # optional ND backends (default loop unchanged; jit/cuda opt-in)
   fidelity.py           # generational distance, coverage, front loader
   results.py            # JSONL benchmark run records
   schedules.py          # smoke, default, and deep anneal budgets
@@ -70,6 +72,7 @@ demos/run_potts_thrml.py
 demos/run_domain_wall.py
 demos/run_torx_pswap.py # optional; needs the torx extra
 docs/fidelity_hooks.md
+docs/nd_kernel.md       # optional nondominated kernel (profile + before/after)
 docs/spikes/            # denominator, shipped, and dominated archive
 tests/
 .github/workflows/ci.yml
@@ -78,6 +81,7 @@ tests/
 | Piece | Status |
 |-------|--------|
 | `WeightSweepLoop`, archive, weights | implemented |
+| Optional ND ranking kernel (`jit` / `cuda`) | opt-in via `nondominated_mask(..., backend=...)` or `UNSGA3_ND_BACKEND`. Default `loop` path unchanged. See [docs/nd_kernel.md](docs/nd_kernel.md) |
 | `ThrmlIsingBackend` | implemented (THRML 0.1.4 API) |
 | `ThrmlPottsBackend` + `PottsChainProblem` | implemented (THRML 0.1.4 categorical API) |
 | Domain-wall Ising image of that Potts chain | THRML simulation (`ThrmlDomainWallBackend`, issue #10). Not Z1, not `codon_opt` |
@@ -113,6 +117,16 @@ pip install -e ".[dev,cpu,torx]"
 pytest -q -m torx
 python demos/run_torx_pswap.py
 ```
+
+Optional compiled ranking kernel (Numba; CUDA is used only when a GPU is present):
+
+```bash
+pip install -e ".[dev,kernels]"
+export UNSGA3_ND_BACKEND=jit   # or pass backend='jit' to nondominated_mask
+python benchmarks/run_nd_kernel.py
+```
+
+The default `loop` path does not need this extra. See [docs/nd_kernel.md](docs/nd_kernel.md).
 
 Default demos (no `--smoke`):
 

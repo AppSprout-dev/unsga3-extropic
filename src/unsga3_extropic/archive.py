@@ -7,16 +7,16 @@ caller-supplied reference directions. Search does not happen here.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 
 import numpy as np
 
+_ND_BACKEND_ENV = "UNSGA3_ND_BACKEND"
 
-def nondominated_mask(objs: np.ndarray, *, minimize: bool = True) -> np.ndarray:
-    """Boolean mask of non-dominated rows (Pareto front of the finite set)."""
-    objs = np.asarray(objs, dtype=np.float64)
-    if objs.ndim != 2:
-        raise ValueError(f"objs must be 2-D, got shape {objs.shape}")
+
+def _nondominated_mask_loop(objs: np.ndarray, *, minimize: bool = True) -> np.ndarray:
+    """Original per-row NumPy scan. Default ranking path; do not change lightly."""
     n = len(objs)
     keep = np.ones(n, dtype=bool)
     for i in range(n):
@@ -33,6 +33,33 @@ def nondominated_mask(objs: np.ndarray, *, minimize: bool = True) -> np.ndarray:
         if np.any(dom):
             keep[i] = False
     return keep
+
+
+def nondominated_mask(
+    objs: np.ndarray, *, minimize: bool = True, backend: str | None = None
+) -> np.ndarray:
+    """Boolean mask of non-dominated rows (Pareto front of the finite set).
+
+    ``backend`` selects an implementation. ``None`` reads the
+    ``UNSGA3_ND_BACKEND`` environment variable and falls back to
+    ``loop``, the original per-row NumPy scan. Other names (``tiled``,
+    ``jit``, ``jit_parallel``, ``cuda``) are opt-in; see
+    ``unsga3_extropic.kernels.nondominated``. The mask values stay the
+    same across backends.
+    """
+    objs = np.asarray(objs, dtype=np.float64)
+    if objs.ndim != 2:
+        raise ValueError(f"objs must be 2-D, got shape {objs.shape}")
+    if backend is None:
+        chosen = os.environ.get(_ND_BACKEND_ENV, "loop")
+    else:
+        chosen = backend
+    name = str(chosen).strip().lower() or "loop"
+    if name == "loop":
+        return _nondominated_mask_loop(objs, minimize=minimize)
+    from unsga3_extropic.kernels.nondominated import nondominated_mask_backend
+
+    return nondominated_mask_backend(objs, minimize=minimize, backend=name)
 
 
 def unique_rows(a: np.ndarray, decimals: int = 6) -> np.ndarray:
