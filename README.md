@@ -94,7 +94,7 @@ tests/
 | Torx `PSWAP` circuit | optional extra `torx` (`extro-torx`, Python ≥ 3.11), default off. Not the search loop |
 | Thermalizers / hardware | not implemented (2026-10-02 check: no public package or API) |
 | Reference-direction niching | implemented on the weight-sweep archive (ideal–nadir normalization, perpendicular association, closer occupant). `WeightSweepLoop` has no crossover or mutation. The classical column niching lives in `unsga3_extropic.classical` |
-| CI | GitHub Actions: core tests without the torx extra; a separate job runs the Torx smoke. Deep benchmarks are `workflow_dispatch` only (`.github/workflows/deep.yml`) |
+| CI | GitHub Actions: core tests install `.[dev,cpu,kernels]` so the optional jit ranking tests run; a separate job runs the Torx smoke. GPU kernel tests skip without a device. Deep benchmarks are `workflow_dispatch` only (`.github/workflows/deep.yml`) |
 
 ## Install and test
 

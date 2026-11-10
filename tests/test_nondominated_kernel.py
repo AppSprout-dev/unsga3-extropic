@@ -120,3 +120,55 @@ def test_list_backends_includes_all_names():
     assert available["tiled"] is True
     assert available["cuda"] is cuda_available()
     assert available["jit"] is jit_available()
+
+def _nonfinite_cases():
+    """Clouds where IEEE NaN/inf comparisons decide dominance."""
+    return [
+        np.array([[np.nan, 0.1], [1.0, 1.0]]),
+        np.array([[0.0, 0.0], [np.nan, 1.0]]),
+        np.array([[np.nan, np.nan], [np.nan, 0.0], [0.0, 0.0]]),
+        np.array([[0.0, 1.0], [np.nan, 0.0], [1.0, 0.0], [0.6, 0.6]]),
+        np.array([[0.0, 1.0], [np.inf, 0.0], [1.0, 0.0]]),
+        np.array([[np.inf, np.inf], [0.0, 1.0], [1.0, 0.0]]),
+        np.array([[-np.inf, 1.0], [0.0, 0.0], [1.0, -np.inf]]),
+        np.array([[np.nan, np.inf], [0.5, 0.5], [np.inf, np.nan], [0.0, 1.0]]),
+        np.array([[0.0, 0.0, np.nan], [1.0, 1.0, 1.0], [0.1, 0.1, 0.1]]),
+    ]
+
+
+def test_nonfinite_matches_loop():
+    """Every available backend matches the loop on NaN and inf rows.
+
+    The default scan uses NumPy ``<=`` / ``<``. A NaN coordinate fails
+    those tests, so a NaN row does not dominate a finite row and a
+    finite row does not dominate a NaN row. Compiled backends used to
+    treat ``not (a > b + eps)`` as ``a <= b + eps``, which is false for
+    NaN and let a NaN row dominate.
+    """
+    backends = ["loop", "tiled", *_optional()]
+    # The reported bug: NaN row must not dominate the finite row.
+    reported = np.array([[np.nan, 0.1], [1.0, 1.0]])
+    assert nondominated_mask(reported, backend="loop").tolist() == [True, True]
+    for objs in _nonfinite_cases():
+        for minimize in (True, False):
+            expected = nondominated_mask(objs, minimize=minimize, backend="loop")
+            for backend in backends:
+                got = nondominated_mask(objs, minimize=minimize, backend=backend)
+                assert np.array_equal(got, expected), (
+                    backend,
+                    minimize,
+                    objs,
+                    expected,
+                    got,
+                )
+
+
+def test_loop_backend_is_archive_scan():
+    """``backend='loop'`` must call the archive scan, not a second copy."""
+    import inspect
+
+    from unsga3_extropic.kernels.nondominated import nondominated_mask_loop
+
+    source = inspect.getsource(nondominated_mask_loop)
+    assert "_nondominated_mask_loop" in source
+    assert "np.all" not in source
