@@ -23,6 +23,7 @@ cpu = ["jax[cpu]>=0.4.30"]
 # extro-torx requires Python >= 3.11. It is not a core dependency.
 # `pip install -e .` on Python 3.10 does not install it.
 torx = ["extro-torx>=0.0.2"]
+kernels = ["numba>=0.59"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/unsga3_extropic"]
@@ -37,4 +38,5 @@ markers = [
   "thrml: requires the thrml and jax packages",
   "torx: requires the extro-torx extra (Python >= 3.11)",
   "deep: on-demand multi-seed benchmark (benchmarks/run_deep.py); excluded from default CI",
+  "gpu: requires a CUDA device; skipped when none is present",
 ]

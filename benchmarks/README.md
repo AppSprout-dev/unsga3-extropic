@@ -73,3 +73,14 @@ IGD in `benchmarks/ORACLE_RESULTS.md` is the `igd=` line from `unsga3-bend/ab/ig
 export UNSGA3_BEND_ROOT=/path/to/unsga3-bend   # optional; /workspace/unsga3-bend is also checked
 python benchmarks/run_oracle_continuous.py
 ```
+
+## Optional nondominated kernel
+
+`benchmarks/run_nd_kernel.py` times `archive.nondominated_mask` backends (`loop` is the default BEFORE column). It does not sample, does not call `WeightSweepLoop`, and does not write tracked records unless `--out` is set. Numbers live in [ND_KERNEL_RESULTS.md](ND_KERNEL_RESULTS.md). The writeup is [docs/nd_kernel.md](../docs/nd_kernel.md).
+
+```bash
+python benchmarks/run_nd_kernel.py
+python benchmarks/run_nd_kernel.py --out /tmp/nd_kernel.md
+```
+
+`jit` needs the optional `kernels` extra (`pip install -e '.[kernels]'`). `cuda` is skipped when no GPU is present. CI does not run this command.
