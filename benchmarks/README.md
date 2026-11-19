@@ -84,3 +84,13 @@ python benchmarks/run_nd_kernel.py --out /tmp/nd_kernel.md
 ```
 
 `jit` needs the optional `kernels` extra (`pip install -e '.[kernels]'`). `cuda` is skipped when no GPU is present. CI does not run this command.
+
+## EBR spike (selection and plateau stop)
+
+`benchmarks/run_ebr_spike.py` runs the deep codon and Potts tasks (seeds 7, 11, 19) with the default ExactEw chain, with opt-in lowest-energy selection, with the opt-in energy-plateau stop, and with the shipped THRML backend. It writes `records/ebr_spike.json` (or `--out`) and does not touch `runs.jsonl`. `benchmarks/ebr_spike_report.py` renders the tables in [EBR_SPIKE_RESULTS.md](EBR_SPIKE_RESULTS.md). The note is [docs/ebr_note.md](../docs/ebr_note.md). CI does not run this command (about 9 minutes on CPU, mostly THRML; `--skip-thrml` takes seconds).
+
+```bash
+python benchmarks/run_ebr_spike.py
+python benchmarks/run_ebr_spike.py --skip-thrml --out /tmp/ebr_spike.json
+python benchmarks/ebr_spike_report.py
+```
