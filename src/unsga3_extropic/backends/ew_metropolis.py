@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 
@@ -20,6 +20,9 @@ import numpy as np
 _DEFAULT_STEP_SCALE = 0.1
 
 from unsga3_extropic.backends.base import BackendResult
+
+if TYPE_CHECKING:
+    from unsga3_extropic.ebr import PlateauStop
 
 ObjectiveFn = Callable[[np.ndarray], np.ndarray]  # bits (..., n) -> (..., M)
 ProposeFn = Callable[[np.ndarray, np.random.Generator], np.ndarray]
@@ -34,12 +37,19 @@ def _default_bit_flip(x: np.ndarray, rng: np.random.Generator) -> np.ndarray:
 
 @dataclass
 class ExactEwMetropolisBackend:
-    """Annealed MH on bitstrings with exact E_w = w · f(x)."""
+    """Annealed MH on bitstrings with exact E_w = w · f(x).
+
+    ``plateau`` is opt-in (default ``None``, which is the unchanged
+    schedule). When set, each beta stage stops recording samples once
+    ``plateau.should_stop`` fires on that stage's running best energy, and
+    the chain moves to the next beta. Warmup is not shortened.
+    """
 
     n_bits: int
     objective_fn: ObjectiveFn
     propose: ProposeFn | None = None
     init_fn: Callable[[np.random.Generator], np.ndarray] | None = None
+    plateau: PlateauStop | None = None
 
     def sample_weight(
         self,
@@ -79,6 +89,7 @@ class ExactEwMetropolisBackend:
                 if dE <= 0.0 or rng.random() < np.exp(-beta * dE):
                     x, e = y, ey
             # samples
+            stage_best: list[float] = []
             for _ in range(n_samples):
                 for _ in range(steps_per_sample):
                     y = propose(x, rng)
@@ -91,6 +102,10 @@ class ExactEwMetropolisBackend:
                 collected_x.append(x.copy())
                 collected_f.append(f)
                 collected_e.append(e)
+                if self.plateau is not None:
+                    stage_best.append(e if not stage_best else min(stage_best[-1], e))
+                    if self.plateau.should_stop(stage_best):
+                        break
 
         return BackendResult(
             decisions=np.stack(collected_x, axis=0),
