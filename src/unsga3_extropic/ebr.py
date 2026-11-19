@@ -19,6 +19,7 @@ default behavior.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -91,10 +92,24 @@ class PlateauStop:
     """Stop when the best energy improved by at most ``tol`` over ``window`` samples.
 
     ``best_trace[k]`` is the lowest energy seen after recorded sample ``k``
-    (non-increasing). The rule fires at the first ``k >= window`` with
-    ``best_trace[k - window] - best_trace[k] <= tol``. With ``window``
-    samples recorded there is nothing to compare, so the earliest stop
-    leaves ``window + 1`` samples.
+    (non-increasing), built with ``running_best``. The rule fires at the
+    first ``k >= window`` with ``best_trace[k - window] - best_trace[k] <= tol``.
+    With ``window`` samples recorded there is nothing to compare, so the
+    earliest stop leaves ``window + 1`` samples.
+
+    Non-finite energies:
+
+    * ``NaN`` never updates the running best. Before any other value has
+      been seen the best is ``+inf``, so a leading ``NaN`` cannot poison the
+      trace. A ``NaN`` entry passed straight to ``should_stop`` is read as
+      ``+inf``.
+    * ``+inf`` is an energy no better than anything else, so it never
+      lowers the best.
+    * ``-inf`` becomes the best. Nothing can improve on it, so the rule
+      fires once ``-inf`` has been the best for ``window`` samples.
+    * While the best is still ``+inf`` (only ``NaN`` or ``+inf`` seen), the
+      rule does not fire: there is no energy to call a plateau. The first
+      finite best after ``+inf`` counts as an unbounded improvement.
     """
 
     window: int
@@ -106,18 +121,34 @@ class PlateauStop:
         if not (np.isfinite(self.tol) and self.tol >= 0.0):
             raise ValueError(f"tol must be finite and >= 0, got {self.tol!r}")
 
+    @staticmethod
+    def running_best(previous: float, value: float) -> float:
+        """Next running best after ``value``. Start from ``math.inf``. ``NaN`` is ignored."""
+        v = float(value)
+        if math.isnan(v):
+            return float(previous)
+        return min(float(previous), v)
+
     def should_stop(self, best_trace: list[float] | np.ndarray) -> bool:
         k = len(best_trace) - 1
         if k < self.window:
             return False
-        return float(best_trace[k - self.window]) - float(best_trace[k]) <= self.tol
+        old = float(best_trace[k - self.window])
+        new = float(best_trace[k])
+        old = math.inf if math.isnan(old) else old
+        new = math.inf if math.isnan(new) else new
+        if new == math.inf:
+            return False
+        if old == new:  # includes -inf == -inf, where old - new would be NaN
+            return True
+        return old - new <= self.tol
 
     def stop_index(self, energies: np.ndarray) -> int | None:
         """First sample index where the rule fires on this trace, else ``None``."""
         e = np.asarray(energies, dtype=np.float64).reshape(-1)
         best: list[float] = []
         for k, value in enumerate(e):
-            best.append(float(value) if not best else min(best[-1], float(value)))
+            best.append(self.running_best(best[-1] if best else math.inf, value))
             if self.should_stop(best):
                 return k
         return None

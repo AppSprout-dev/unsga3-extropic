@@ -173,19 +173,111 @@ def test_backend_plateau_stops_each_stage_on_flat_energy():
     assert res.n_evals == 1 + len(betas) * (4 + 4 * 2)
 
 
-def test_backend_plateau_does_not_fire_while_improving():
-    # energy = number of ones; start all ones, only downhill flips exist at beta large
-    def ones(bits):
-        b = np.asarray(bits, dtype=np.float64)
-        return np.stack([b.sum(-1), np.zeros(b.shape[0])], axis=-1)
+def _downhill_flip(x: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Flip the first 1 to 0, so energy = number of ones drops every step."""
+    y = x.copy()
+    ones = np.flatnonzero(y == 1)
+    if len(ones):
+        y[ones[0]] = 0
+    return y
 
+
+def _count_ones(bits: np.ndarray) -> np.ndarray:
+    b = np.asarray(bits, dtype=np.float64)
+    return np.stack([b.sum(-1), np.zeros(b.shape[0])], axis=-1)
+
+
+def _flat(bits: np.ndarray) -> np.ndarray:
+    return np.zeros((np.asarray(bits).shape[0], 2))
+
+
+def test_backend_plateau_does_not_fire_while_improving():
+    # 40 ones, one forced downhill flip per step: strictly improving for all 30 samples.
+    window, n_samples = 8, 30
+    assert window < n_samples
     backend = ExactEwMetropolisBackend(
-        n_bits=12,
-        objective_fn=ones,
-        init_fn=lambda rng: np.ones(12),
-        plateau=PlateauStop(window=100),
+        n_bits=40,
+        objective_fn=_count_ones,
+        propose=_downhill_flip,
+        init_fn=lambda rng: np.ones(40),
+        plateau=PlateauStop(window=window),
     )
     res = backend.sample_weight(
-        np.array([1.0, 0.0]), seed=0, betas=(50.0,), n_warmup=0, n_samples=30, steps_per_sample=1
+        np.array([1.0, 0.0]), seed=0, betas=(50.0,), n_warmup=0, n_samples=n_samples,
+        steps_per_sample=1,
     )
-    assert len(res.energies) == 30
+    assert len(res.energies) == n_samples
+    assert np.all(np.diff(res.energies) < 0)
+
+
+def test_backend_plateau_same_window_fires_on_flat_energy():
+    # Paired with the test above: the same window does fire on a flat trace.
+    window, n_samples = 8, 30
+    backend = ExactEwMetropolisBackend(
+        n_bits=40,
+        objective_fn=_flat,
+        propose=_downhill_flip,
+        init_fn=lambda rng: np.ones(40),
+        plateau=PlateauStop(window=window),
+    )
+    res = backend.sample_weight(
+        np.array([1.0, 0.0]), seed=0, betas=(50.0,), n_warmup=0, n_samples=n_samples,
+        steps_per_sample=1,
+    )
+    assert len(res.energies) == window + 1
+
+
+# --- non-finite energies --------------------------------------------------
+
+
+def test_running_best_ignores_nan():
+    rb = PlateauStop.running_best
+    assert rb(float("inf"), float("nan")) == float("inf")
+    assert rb(2.0, float("nan")) == 2.0
+    assert rb(2.0, 1.0) == 1.0
+    assert rb(2.0, float("inf")) == 2.0
+    assert rb(2.0, float("-inf")) == float("-inf")
+
+
+def test_plateau_leading_nan_does_not_poison_trace():
+    stop = PlateauStop(window=2)
+    nan = float("nan")
+    # best trace: inf, 3, 3, 3 -> fires at k=3 (3 - 3 = 0)
+    assert stop.stop_index(np.array([nan, 3.0, 5.0, 4.0, 1.0])) == 3
+    # NaN in the middle is skipped too: best 3, 3, 2, 2, 2 -> fires at k=4
+    assert stop.stop_index(np.array([3.0, nan, 2.0, nan, nan, 0.0])) == 4
+    # still improving after a leading NaN: never fires
+    assert stop.stop_index(np.array([nan, 5.0, 4.0, 3.0, 2.0])) is None
+
+
+def test_plateau_only_nan_or_posinf_never_fires():
+    stop = PlateauStop(window=1)
+    assert stop.stop_index(np.full(10, np.nan)) is None
+    assert stop.stop_index(np.full(10, np.inf)) is None
+    assert not stop.should_stop([float("nan"), float("nan")])
+
+
+def test_plateau_first_finite_after_inf_is_improvement():
+    stop = PlateauStop(window=1, tol=1e9)
+    assert not stop.should_stop([float("inf"), 5.0])
+    assert stop.should_stop([5.0, 5.0])
+
+
+def test_plateau_neg_inf_fires_after_window_and_not_before():
+    stop = PlateauStop(window=2)
+    ninf = float("-inf")
+    # best: 3, -inf, -inf, -inf -> k=2 compares 3 vs -inf (unbounded gain), k=3 fires
+    assert stop.stop_index(np.array([3.0, ninf, 7.0, 0.0, 0.0])) == 3
+    assert not stop.should_stop([3.0, 2.0, ninf])
+    assert stop.should_stop([ninf, ninf, ninf])
+
+
+def test_backend_plateau_all_nan_energy_records_every_sample():
+    def nan_obj(bits):
+        return np.full((np.asarray(bits).shape[0], 2), np.nan)
+
+    backend = ExactEwMetropolisBackend(n_bits=6, objective_fn=nan_obj, plateau=PlateauStop(window=2))
+    res = backend.sample_weight(
+        np.array([0.5, 0.5]), seed=3, betas=(1.0, 2.0), n_warmup=2, n_samples=10, steps_per_sample=1
+    )
+    assert len(res.energies) == 2 * 10

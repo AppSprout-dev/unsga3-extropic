@@ -42,7 +42,9 @@ class ExactEwMetropolisBackend:
     ``plateau`` is opt-in (default ``None``, which is the unchanged
     schedule). When set, each beta stage stops recording samples once
     ``plateau.should_stop`` fires on that stage's running best energy, and
-    the chain moves to the next beta. Warmup is not shortened.
+    the chain moves to the next beta. Warmup is not shortened. The running
+    best comes from ``PlateauStop.running_best`` (``NaN`` energies are
+    ignored; see ``PlateauStop`` for ``+inf`` and ``-inf``).
     """
 
     n_bits: int
@@ -103,7 +105,8 @@ class ExactEwMetropolisBackend:
                 collected_f.append(f)
                 collected_e.append(e)
                 if self.plateau is not None:
-                    stage_best.append(e if not stage_best else min(stage_best[-1], e))
+                    prev = stage_best[-1] if stage_best else math.inf
+                    stage_best.append(self.plateau.running_best(prev, e))
                     if self.plateau.should_stop(stage_best):
                         break
 
