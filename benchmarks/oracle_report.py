@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass
-from typing import Literal, Never
+from typing import Literal, NoReturn
 
 from unsga3_extropic.problems.continuous import OracleName
 
@@ -27,7 +27,7 @@ EXACTEW_DOMINATED_POINTER = (
 )
 
 
-def _unreachable(name: Never) -> Never:
+def _unreachable(name: object) -> NoReturn:
     raise AssertionError(f"unhandled oracle problem {name!r}")
 
 

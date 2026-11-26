@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from statistics import NormalDist
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
@@ -18,6 +19,8 @@ import numpy as np
 # Fixed proposal width for the box kernel. Ten percent of the unit interval.
 # Not chosen by searching IGD.
 _DEFAULT_STEP_SCALE = 0.1
+_MAX_TRUNC_REJECTIONS = 64
+_STD_NORMAL = NormalDist(0.0, 1.0)
 
 from unsga3_extropic.backends.base import BackendResult
 
@@ -71,11 +74,13 @@ class ExactEwMetropolisBackend:
         else:
             x = rng.integers(0, 2, size=self.n_bits).astype(np.float64)
 
-        def energy(bits: np.ndarray) -> float:
-            f = np.asarray(self.objective_fn(bits.reshape(1, -1)), dtype=np.float64)[0]
-            return float(np.dot(w, f))
+        def eval_energy(bits: np.ndarray) -> tuple[float, np.ndarray]:
+            f_vec = np.asarray(
+                self.objective_fn(bits.reshape(1, -1)), dtype=np.float64
+            )[0]
+            return float(np.dot(w, f_vec)), f_vec
 
-        e = energy(x)
+        e, f = eval_energy(x)
         collected_x: list[np.ndarray] = []
         collected_f: list[np.ndarray] = []
         collected_e: list[float] = []
@@ -85,24 +90,23 @@ class ExactEwMetropolisBackend:
             # warmup
             for _ in range(n_warmup):
                 y = propose(x, rng)
-                ey = energy(y)
+                ey, fy = eval_energy(y)
                 n_evals += 1
                 dE = ey - e
                 if dE <= 0.0 or rng.random() < np.exp(-beta * dE):
-                    x, e = y, ey
+                    x, e, f = y, ey, fy
             # samples
             stage_best: list[float] = []
             for _ in range(n_samples):
                 for _ in range(steps_per_sample):
                     y = propose(x, rng)
-                    ey = energy(y)
+                    ey, fy = eval_energy(y)
                     n_evals += 1
                     dE = ey - e
                     if dE <= 0.0 or rng.random() < np.exp(-beta * dE):
-                        x, e = y, ey
-                f = np.asarray(self.objective_fn(x.reshape(1, -1)), dtype=np.float64)[0]
+                        x, e, f = y, ey, fy
                 collected_x.append(x.copy())
-                collected_f.append(f)
+                collected_f.append(f.copy())
                 collected_e.append(e)
                 if self.plateau is not None:
                     prev = stage_best[-1] if stage_best else math.inf
@@ -144,10 +148,22 @@ def _truncated_normal_coordinate(
     y = np.array(x, dtype=np.float64, copy=True)
     index = int(rng.integers(0, y.shape[0]))
     old = float(y[index])
-    while True:
-        candidate = old + float(rng.normal(0.0, sigma))
-        if lower <= candidate <= upper:
+    candidate: float | None = None
+    for _ in range(_MAX_TRUNC_REJECTIONS):
+        draw = old + float(rng.normal(0.0, sigma))
+        if lower <= draw <= upper:
+            candidate = draw
             break
+    if candidate is None:
+        # Inverse-CDF fallback when sigma >> (upper - lower) so rejection never spins.
+        p_lo = _std_norm_cdf((lower - old) / sigma)
+        p_hi = _std_norm_cdf((upper - old) / sigma)
+        if p_hi - p_lo > 1e-15:
+            u = p_lo + float(rng.random()) * (p_hi - p_lo)
+            u = min(max(u, 1e-15), 1.0 - 1e-15)
+            candidate = min(max(old + sigma * _STD_NORMAL.inv_cdf(u), lower), upper)
+        else:
+            candidate = lower + float(rng.random()) * (upper - lower)
     y[index] = candidate
     log_z_old = math.log(_truncation_mass(old, sigma, lower, upper))
     log_z_new = math.log(_truncation_mass(candidate, sigma, lower, upper))
@@ -164,12 +180,14 @@ class ExactEwContinuousBackend:
     this backend does not fit a surrogate to pretend that they are.
 
     Each proposal adds ``Normal(0, step_scale)`` to one coordinate and
-    rejects draws that leave the box, which is a truncated normal. The
-    Hastings ratio is ``Z(new) / Z(old)``, where ``Z`` is the Gaussian
-    mass still inside the box. ``step_scale`` defaults to 0.1 on the unit
-    interval. ``n_evals`` is the number of objective calls: the initial
-    point plus one call per in-box proposal. The vector stored with a
-    sample is that call's result, not a second evaluation.
+    rejects draws that leave the box, which is a truncated normal:
+    ``q(y | x) = phi((y - x) / sigma) / (sigma * Z(x))``, where ``Z(x)``
+    is the Gaussian mass inside ``[lower, upper]``. Because the Gaussian
+    numerator is symmetric, the Hastings ratio is
+    ``q(x | y) / q(y | x) = Z(old) / Z(new)``. ``step_scale`` defaults to
+    0.1 on the unit interval. ``n_evals`` is the number of objective calls:
+    the initial point plus one call per in-box proposal. The vector stored
+    with a sample is that call's result, not a second evaluation.
     """
 
     n_var: int
@@ -227,9 +245,10 @@ class ExactEwContinuousBackend:
             )
             ey, fy = energy_of(y)
             n_evals += 1
-            # log(accept) = -beta dE + log Z(new) - log Z(old)
-            log_alpha = -beta * (ey - e) + log_z_new - log_z_old
-            if log_alpha >= 0.0 or math.log(float(rng.random())) < log_alpha:
+            # q(y|x) = phi((y-x)/sigma) / (sigma * Z(x)), so q(x|y)/q(y|x) = Z(old)/Z(new)
+            log_alpha = -beta * (ey - e) + log_z_old - log_z_new
+            u = float(rng.random())
+            if log_alpha >= 0.0 or (u > 0.0 and math.log(u) < log_alpha):
                 x, e, f = y, ey, fy
 
         for beta in betas:

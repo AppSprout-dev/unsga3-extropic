@@ -14,6 +14,7 @@ schedule, and they do not claim a Z1 or Thermalizers run.
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -111,6 +112,8 @@ def _as_optional_number(value, *, name: str) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{name} must be a number or null")
     number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"{name} must be finite")
     if number < 0:
         raise ValueError(f"{name} must be >= 0")
     return number
@@ -125,8 +128,8 @@ def validate_run_record(record: dict) -> None:
         raise ValueError(
             f"schema_version must be {SCHEMA_VERSION}, got {record['schema_version']!r}"
         )
-    if not isinstance(record["date"], str):
-        raise ValueError("date must be an ISO-8601 string")
+    if not isinstance(record["date"], str) or len(record["date"]) < 20:
+        raise ValueError("date must be a full ISO-8601 UTC timestamp (minLength 20)")
     _parse_iso(record["date"])
     for key in ("git_sha", "issue", "phase", "problem", "backend"):
         if not isinstance(record[key], str) or record[key] == "":
@@ -146,8 +149,13 @@ def validate_run_record(record: dict) -> None:
     betas = schedule["betas"]
     if not isinstance(betas, list) or len(betas) < 1:
         raise ValueError("schedule.betas must be a non-empty list of numbers")
-    if any(isinstance(b, bool) or not isinstance(b, (int, float)) for b in betas):
-        raise ValueError("schedule.betas must be a non-empty list of numbers")
+    if any(
+        isinstance(b, bool)
+        or not isinstance(b, (int, float))
+        or not math.isfinite(float(b))
+        for b in betas
+    ):
+        raise ValueError("schedule.betas must be a non-empty list of finite numbers")
     for key, minimum in (
         ("n_warmup", 0),
         ("n_samples", 1),
@@ -181,9 +189,14 @@ def validate_run_record(record: dict) -> None:
         if (
             not isinstance(hv_ref, list)
             or len(hv_ref) != 2
-            or any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in hv_ref)
+            or any(
+                isinstance(v, bool)
+                or not isinstance(v, (int, float))
+                or not math.isfinite(float(v))
+                for v in hv_ref
+            )
         ):
-            raise ValueError("metrics.hv_ref must be null or [number, number]")
+            raise ValueError("metrics.hv_ref must be null or [finite, finite]")
 
     artifacts = record["artifacts"]
     if not isinstance(artifacts, dict):
@@ -198,7 +211,7 @@ def append_run_record(path: str | Path, record: dict) -> None:
     validate_run_record(record)
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    line = json.dumps(record, sort_keys=True)
+    line = json.dumps(record, sort_keys=True, allow_nan=False)
     with dest.open("a", encoding="utf-8") as handle:
         handle.write(line + "\n")
 

@@ -19,10 +19,14 @@ None.
 
 ## Shipped
 
-None yet. A spike lands in [shipped/](shipped/) only after its denominator is filled and the README claim names a checkable artifact.
+| Date | Card | Artifact |
+|------|------|----------|
+| 2026-11-10 | [Optional non-dominated ranking kernel](shipped/2026-11-10-nd-kernel.md) | [benchmarks/ND_KERNEL_RESULTS.md](../../benchmarks/ND_KERNEL_RESULTS.md) |
+| 2026-11-19 | [EBR energy-plateau stopping rule](shipped/2026-11-19-ebr-plateau-stop.md) | [benchmarks/EBR_SPIKE_RESULTS.md](../../benchmarks/EBR_SPIKE_RESULTS.md) |
 
 ## Dominated
 
 | Date | Card | Labels |
 |------|------|--------|
 | 2026-10-07 | [ExactEw continuous, not U-NSGA-III](dominated/2026-10-07-exactew-continuous-not-unsga3.md) | `dominated:igd`, `still_true` |
+| 2026-11-19 | [EBR lowest-energy selection as archive replacement](dominated/2026-11-19-ebr-lowest-energy-selection.md) | `dominated:claim`, `still_true` |

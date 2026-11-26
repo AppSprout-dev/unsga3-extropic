@@ -15,7 +15,7 @@ IGD is the in-repo yardstick formula, the same quantity as the `igd=` line of `u
 
 Reference fronts: ZDT1 and ZDT2 analytic curves, 500 points (`f1 = i / 499`); DTLZ2 Das–Dennis at partitions 12, each direction scaled to unit L2 length (91 points, `pf_source=analytic-das-dennis-l2`). That is the Bend script's analytic fallback and the C# `ParetoFronts.Dtlz2` construction. pymoo is not imported, and pymoo's default ~136-point DTLZ2 sample is not used.
 
-Objective evaluations are `pop * n_gen`, including the initial population. ZDT1 is 52×100 = 5200. ZDT2 is 52×250 = 13000. DTLZ2 is 92×150 = 13800. The population is at least the Das–Dennis count (ZDT H=13, DTLZ2 H=91).
+Objective evaluations are `pop * n_gen`, including the initial population (`1` initial generation plus `n_gen - 1` offspring generations; note that Bend and C# `gens` counts offspring generations after initialization, i.e., `(gens + 1) * pop`). ZDT1 is 52×100 = 5200. ZDT2 is 52×250 = 13000. DTLZ2 is 92×150 = 13800. The population is at least the Das–Dennis count (ZDT H=13, DTLZ2 H=91).
 
 ## Medians
 

@@ -7,28 +7,62 @@ caller-supplied reference directions. Search does not happen here.
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass, field
 
 import numpy as np
 
 _ND_BACKEND_ENV = "UNSGA3_ND_BACKEND"
+_ND_EPS = 1e-12
+
+
+def _nondominated_mask_2d_finite(objs: np.ndarray, *, minimize: bool) -> np.ndarray:
+    """Exact O(n log n) 2-D sweep-line matching the 1e-12 slack of the pairwise scan.
+
+    Assumes ``objs`` has shape ``(n, 2)`` and all entries are finite.
+    """
+    n = len(objs)
+    if n == 0:
+        return np.ones(0, dtype=bool)
+    signed = objs if minimize else -objs
+    x = signed[:, 0]
+    y = signed[:, 1]
+    order = np.argsort(x, kind="mergesort")
+    xs = x[order]
+    ys = y[order]
+    prefix_min = np.minimum.accumulate(ys)
+    # A_p = {q : xs[q] < xs[p] - eps} dominates p iff min(y in A_p) <= ys[p] + eps.
+    # A_p U B_p = {q : xs[q] <= xs[p] + eps} dominates p iff min(y in A_p U B_p) < ys[p] - eps.
+    left = np.searchsorted(xs, xs - _ND_EPS, side="left")
+    right = np.searchsorted(xs, xs + _ND_EPS, side="right")
+    dom_strict = np.zeros(n, dtype=bool)
+    has_left = left > 0
+    dom_strict[has_left] = prefix_min[left[has_left] - 1] <= ys[has_left] + _ND_EPS
+    dom_win = prefix_min[right - 1] < ys - _ND_EPS
+    keep = np.empty(n, dtype=bool)
+    keep[order] = ~(dom_strict | dom_win)
+    return keep
 
 
 def _nondominated_mask_loop(objs: np.ndarray, *, minimize: bool = True) -> np.ndarray:
-    """Original per-row NumPy scan. Default ranking path; do not change lightly."""
+    """Default pure-NumPy non-dominated scan (O(n log n) sweep for finite 2-D)."""
     n = len(objs)
+    if n == 0:
+        return np.ones(0, dtype=bool)
+    if objs.shape[1] == 2 and np.isfinite(objs).all():
+        return _nondominated_mask_2d_finite(objs, minimize=minimize)
     keep = np.ones(n, dtype=bool)
     for i in range(n):
         if not keep[i]:
             continue
         if minimize:
-            dom = np.all(objs <= objs[i] + 1e-12, axis=1) & np.any(
-                objs < objs[i] - 1e-12, axis=1
+            dom = np.all(objs <= objs[i] + _ND_EPS, axis=1) & np.any(
+                objs < objs[i] - _ND_EPS, axis=1
             )
         else:
-            dom = np.all(objs >= objs[i] - 1e-12, axis=1) & np.any(
-                objs > objs[i] + 1e-12, axis=1
+            dom = np.all(objs >= objs[i] - _ND_EPS, axis=1) & np.any(
+                objs > objs[i] + _ND_EPS, axis=1
             )
         if np.any(dom):
             keep[i] = False
@@ -42,9 +76,9 @@ def nondominated_mask(
 
     ``backend`` selects an implementation. ``None`` reads the
     ``UNSGA3_ND_BACKEND`` environment variable and falls back to
-    ``loop``, the original per-row NumPy scan. Other names (``tiled``,
-    ``jit``, ``jit_parallel``, ``cuda``) are opt-in; see
-    ``unsga3_extropic.kernels.nondominated``. The mask values stay the
+    ``loop``, the pure-NumPy scan (O(n log n) sweep-line for finite 2-D).
+    Other names (``tiled``, ``jit``, ``jit_parallel``, ``cuda``) are opt-in;
+    see ``unsga3_extropic.kernels.nondominated``. The mask values stay the
     same across backends.
     """
     objs = np.asarray(objs, dtype=np.float64)
@@ -117,19 +151,20 @@ class Archive:
             return x, f
         mask = nondominated_mask(f, minimize=minimize)
         x_nd, f_nd = x[mask], f[mask]
-        # unique on objectives
-        f_u = unique_rows(f_nd, decimals=decimals)
-        # keep one decision per unique objective row
+        # Keep one decision per unique rounded objective row; hash NaNs cleanly.
         kept_x = []
         kept_f = []
-        seen = set()
+        seen: set[tuple[object, ...]] = set()
         for xi, fi in zip(x_nd, f_nd):
-            key = tuple(np.round(fi, decimals=decimals).tolist())
+            rounded = np.round(fi, decimals=decimals).tolist()
+            key = tuple("nan" if math.isnan(v) else (0.0 if v == 0.0 else v) for v in rounded)
             if key in seen:
                 continue
             seen.add(key)
             kept_x.append(xi)
             kept_f.append(fi)
+        if not kept_f:
+            return x[:0], f[:0]
         return np.asarray(kept_x), np.asarray(kept_f, dtype=np.float64)
 
     def associate(
@@ -481,19 +516,34 @@ def niche_survival_rows(
 
 
 def hypervolume_2d(
-    front: np.ndarray, ref: tuple[float, float] = (1.1, 1.1)
+    front: np.ndarray,
+    ref: tuple[float, float] = (1.1, 1.1),
+    *,
+    decimals: int | None = None,
 ) -> float:
     """2-D hypervolume for minimization vs a dominated reference point."""
-    if len(front) == 0:
+    arr = np.asarray(front, dtype=np.float64)
+    if arr.ndim != 2 or arr.shape[1] != 2:
+        raise ValueError(f"hypervolume_2d requires shape (n, 2), got {arr.shape}")
+    if len(arr) == 0:
         return 0.0
-    pts = unique_rows(front[nondominated_mask(front)])
+    pts = arr[nondominated_mask(arr)]
+    if decimals is not None:
+        pts = unique_rows(pts, decimals=decimals)
     pts = pts[(pts[:, 0] < ref[0]) & (pts[:, 1] < ref[1])]
     if len(pts) == 0:
         return 0.0
-    pts = pts[np.argsort(pts[:, 0])]
+    # Sort by ascending f1, then ascending f2; track monotonic best_f2 so exact
+    # duplicates or epsilon-ties never double-count area.
+    order = np.lexsort((pts[:, 1], pts[:, 0]))
+    pts = pts[order]
     hv = 0.0
-    prev_f1 = ref[0]
-    for f1, f2 in pts[::-1]:
-        hv += (prev_f1 - f1) * (ref[1] - f2)
-        prev_f1 = f1
+    best_f2 = float(ref[1])
+    for i in range(len(pts)):
+        f1 = float(pts[i, 0])
+        f2 = float(pts[i, 1])
+        if f2 >= best_f2:
+            continue
+        hv += (float(ref[0]) - f1) * (best_f2 - f2)
+        best_f2 = f2
     return float(hv)

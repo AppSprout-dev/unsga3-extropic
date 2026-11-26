@@ -30,8 +30,6 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-import numpy as np
-
 from unsga3_extropic import __version__
 from unsga3_extropic.fidelity import load_front
 from unsga3_extropic.results import append_run_record, measure_potts_chain
@@ -45,6 +43,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--smoke",
         action="store_true",
         help="Short anneal for CI (fewer weights, betas, and samples).",
+    )
+    parser.add_argument(
+        "--append-log",
+        action="store_true",
+        help="Also append the run record to tracked benchmarks/records/runs.jsonl.",
     )
     return parser.parse_args(argv)
 
@@ -60,7 +63,8 @@ def main(argv: list[str] | None = None) -> int:
     elapsed = time.perf_counter() - t0
     record["notes"] = record["notes"] + f" elapsed_s={elapsed:.3f}. version={__version__}."
     append_run_record(out_dir / "potts_runs.jsonl", record)
-    append_run_record(ROOT / "benchmarks" / "records" / "runs.jsonl", record)
+    if args.append_log:
+        append_run_record(ROOT / "benchmarks" / "records" / "runs.jsonl", record)
     front = load_front(front_path, n_obj=2)
 
     summary = {
@@ -81,7 +85,8 @@ def main(argv: list[str] | None = None) -> int:
     (out_dir / "potts_summary.json").write_text(json.dumps(summary, indent=2))
     print(f"  wrote {out_dir / 'potts_summary.json'}")
     print(f"  appended {out_dir / 'potts_runs.jsonl'}")
-    print(f"  appended {ROOT / 'benchmarks' / 'records' / 'runs.jsonl'}")
+    if args.append_log:
+        print(f"  appended {ROOT / 'benchmarks' / 'records' / 'runs.jsonl'}")
     return 0
 
 

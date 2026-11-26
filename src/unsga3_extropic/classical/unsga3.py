@@ -9,8 +9,10 @@ coin flip. Variation is SBX (η=30, p_c=1) and polynomial mutation
 (η=20, p_m=1/n).
 
 Objective calls equal ``N * n_gen``: the initial population is generation 1,
-and each later generation evaluates N offspring. Decision variables stay in
-the box, ``[0, 1]`` for ZDT and DTLZ2.
+and each later generation evaluates N offspring (matching pymoo's
+``n_gen`` convention; Bend and C# ``Unsga3Algorithm.Run`` run ``maxGenerations``
+loop iterations after generation 0 for ``(maxGenerations + 1) * N`` calls).
+Decision variables stay in the box, ``[0, 1]`` for ZDT and DTLZ2.
 
 NumPy only. This module does not import THRML, does not build an Ising or
 Potts energy, and is not called by ``WeightSweepLoop``.
@@ -221,7 +223,7 @@ def _offspring(
     children[0::2] = first
     children[1::2] = second
     children = polynomial_mutation(children, xl, xu, rng, eta=pm_eta, prob=pm_prob)
-    return _repair_duplicates(decisions, children, xl, xu, rng, pm_eta=pm_eta, pm_prob=pm_prob)
+    return _repair_duplicates(decisions, children, xl, xu, rng, pm_eta=pm_eta)
 
 
 def _repair_duplicates(
@@ -232,12 +234,13 @@ def _repair_duplicates(
     rng: np.random.Generator,
     *,
     pm_eta: float,
-    pm_prob: float,
 ) -> np.ndarray:
     """Polynomial-mutate a child whose 12-decimal key is already used.
 
-    The repaired row is what gets evaluated. Extra mutation attempts are
-    not extra objective calls. After ``_DUP_RETRIES`` the child is kept.
+    All coordinates are mutated (``prob=1.0``) so the repaired child reliably
+    leaves the colliding key. The repaired row is what gets evaluated. Extra
+    mutation attempts are not extra objective calls. After ``_DUP_RETRIES``
+    the child is kept.
     """
     seen = {_decision_key(row) for row in parents}
     repaired = children.copy()
@@ -337,7 +340,7 @@ def _niching(
     zero takes the closest remaining member of that niche. A positive count
     takes one of them at random.
     """
-    remaining = set(splitting)
+    remaining = sorted(set(splitting))
     picked: list[int] = []
     while len(picked) < n_pick and remaining:
         members: dict[int, list[int]] = {}
@@ -345,7 +348,7 @@ def _niching(
             members.setdefault(int(association[position[index]]), []).append(index)
         counts = {niche: int(niche_count[niche]) for niche in members}
         smallest = min(counts.values())
-        niches = [niche for niche, count in counts.items() if count == smallest]
+        niches = sorted(niche for niche, count in counts.items() if count == smallest)
         niche = int(niches[0] if len(niches) == 1 else rng.choice(niches))
         pool = members[niche]
         if niche_count[niche] == 0:

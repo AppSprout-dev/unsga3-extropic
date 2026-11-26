@@ -108,7 +108,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--skip-torx",
         action="store_true",
-        help="Skip the PSWAP rate check.",
+        help="Skip the PSWAP rate check (reuses existing --torx-out JSON if present).",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-run all selected seeds instead of resuming prior rows in --out.",
     )
     parser.add_argument("--worker", choices=SEARCH_CHOICES, help=argparse.SUPPRESS)
     parser.add_argument("--seed", type=int, help=argparse.SUPPRESS)
@@ -252,13 +257,19 @@ def _run_worker(kind: str, seed: int | None = None) -> dict:
     return json.loads(lines[0])
 
 
-def _run_search(kinds: list[str], out: Path, existing: list[dict]) -> list[dict]:
+def _run_search(
+    kinds: list[str],
+    out: Path,
+    existing: list[dict],
+    *,
+    force: bool = False,
+) -> list[dict]:
     records: list[dict] = []
     for kind in kinds:
         if kind == "torx":
             continue
         for seed in DEEP_SCHEDULE.base_seeds:
-            recorded = recorded_deep_seed(existing, kind, seed)
+            recorded = None if force else recorded_deep_seed(existing, kind, seed)
             if recorded is not None:
                 _log(f"resume {kind} base_seed={seed} from {out}")
                 records.append(recorded)
@@ -348,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.out.is_file():
         prior = read_run_records(args.out)
     search_kinds = [kind for kind in kinds if kind != "torx"]
-    records = _run_search(search_kinds, args.out, prior)
+    records = _run_search(search_kinds, args.out, prior, force=bool(args.force))
     torx_payload: dict | None = None
     torx_ok = True
     try:
@@ -362,8 +373,16 @@ def main(argv: list[str] | None = None) -> int:
                 encoding="utf-8",
             )
             _log(f"wrote {args.torx_out}")
+        elif args.skip_torx and args.torx_out.is_file():
+            torx_payload = json.loads(args.torx_out.read_text(encoding="utf-8"))
+            _log(f"reused {args.torx_out}")
     finally:
-        partial = None if args.only is None and not args.skip_torx else ",".join(kinds)
+        has_all_search = set(search_kinds) == set(_KIND_BACKEND)
+        partial = (
+            None
+            if (args.only is None and (not args.skip_torx or (has_all_search and torx_payload is not None)))
+            else ",".join(kinds)
+        )
         summary = render_deep_results(
             deep_records=records,
             prior_records=prior,

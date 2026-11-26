@@ -230,6 +230,7 @@ def main() -> int:
     parser.add_argument("--seeds", default="1-15")
     parser.add_argument("--log", type=Path, default=DEFAULT_LOG)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument("--front-dir", type=Path, default=FRONT_DIR)
     args = parser.parse_args()
     names = tuple(part.strip() for part in args.problems.split(",") if part.strip())
     for name in names:
@@ -246,9 +247,9 @@ def main() -> int:
         spec = specs[problem]
         for seed in seeds:
             stem = front_stem(problem, seed)
-            csv_path = FRONT_DIR / f"{stem}.csv"
-            igd_path = FRONT_DIR / f"{stem}.igd.txt"
-            npz_path = FRONT_DIR / f"{stem}.npz"
+            csv_path = args.front_dir / f"{stem}.csv"
+            igd_path = args.front_dir / f"{stem}.igd.txt"
+            npz_path = args.front_dir / f"{stem}.npz"
             logged = already_logged(
                 existing, problem, seed, spec.n_weights, spec.n_samples
             )
@@ -261,6 +262,10 @@ def main() -> int:
                 result, front, anneal, elapsed = run_seed(problem, seed)
                 write_objective_csv(csv_path, front)
                 parsed, _stdout = score_csv(script, csv_path, problem)
+                try:
+                    csv_display = str(csv_path.resolve().relative_to(ROOT.resolve()))
+                except ValueError:
+                    csv_display = str(csv_path)
                 notes = (
                     "profile=oracle-continuous. "
                     "NumPy ExactEwContinuousBackend weight-sweep. "
@@ -283,7 +288,7 @@ def main() -> int:
                     f"pf_rows={parsed.get('pf_rows', '')} "
                     f"pf_source={parsed.get('pf_source', '')}. "
                     "metrics.generational_distance is null; that field is not pymoo IGD. "
-                    f"csv={csv_path.relative_to(ROOT)} "
+                    f"csv={csv_display} "
                     f"elapsed_s={elapsed:.3f}."
                 )
                 if not logged:

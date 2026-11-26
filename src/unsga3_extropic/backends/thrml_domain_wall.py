@@ -26,7 +26,7 @@ import time, matching ``ThrmlPottsBackend``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Callable
 
@@ -50,6 +50,7 @@ ObjectiveFn = Callable[[np.ndarray], np.ndarray]
 
 def _load_thrml() -> SimpleNamespace:
     """Import JAX and the spin-factor sampler. Optional at package import."""
+    import equinox as eqx
     import jax
     import jax.numpy as jnp
     from thrml import (
@@ -63,6 +64,7 @@ def _load_thrml() -> SimpleNamespace:
     from thrml.models import SpinEBMFactor, SpinGibbsConditional
 
     return SimpleNamespace(
+        eqx=eqx,
         jax=jax,
         jnp=jnp,
         Block=Block,
@@ -135,6 +137,8 @@ class ThrmlDomainWallBackend:
     build_potts: PottsBuilder
     objective_fn: ObjectiveFn
     constraint_strength: float = 4.0
+    _spin_cache: dict = field(default_factory=dict, init=False, repr=False)
+    _checkerboard_cache: dict = field(default_factory=dict, init=False, repr=False)
 
     def program_kind(self, w: np.ndarray) -> str:
         """``thrml_ising`` or ``spin_ebm``, without sampling."""
@@ -229,12 +233,22 @@ class ThrmlDomainWallBackend:
             native = np.asarray(spins_pm1, dtype=np.float64)[..., permutation]
             return image.plus_counts(native)
 
-        raw = ThrmlIsingBackend(
-            n_spins=image.n_spins,
-            build_ising=build_ising,
-            objective_fn=objective_fn,
-            spin_to_decision=spin_to_decision,
-        ).sample_weight(
+        cb_key = (image.n_spins, tuple(int(p) for p in permutation))
+        ising_backend = self._checkerboard_cache.get(cb_key)
+        if ising_backend is None:
+            ising_backend = ThrmlIsingBackend(
+                n_spins=image.n_spins,
+                build_ising=build_ising,
+                objective_fn=objective_fn,
+                spin_to_decision=spin_to_decision,
+            )
+            self._checkerboard_cache[cb_key] = ising_backend
+        else:
+            ising_backend.build_ising = build_ising
+            ising_backend.objective_fn = objective_fn
+            ising_backend.spin_to_decision = spin_to_decision
+
+        raw = ising_backend.sample_weight(
             w,
             seed=seed,
             betas=betas,
@@ -256,17 +270,95 @@ class ThrmlDomainWallBackend:
         steps_per_sample: int,
     ) -> BackendResult:
         t = _load_thrml()
-        nodes = [t.SpinNode() for _ in range(image.n_spins)]
-        free_blocks = [
-            t.Block([nodes[index] for index in block]) for block in image.color_blocks
-        ]
-        observe = t.Block(nodes)
-        spec = t.BlockGibbsSpec(free_blocks, [])
-        samplers = [t.SpinGibbsConditional() for _ in free_blocks]
         biases, _edges, couplings = image.ising_terms(self.constraint_strength)
         n_constraint = len(image.constraint_edges)
-        bias_np = np.asarray(biases, dtype=np.float32)
-        coupling_np = np.asarray(couplings, dtype=np.float32)
+        bias_jnp = t.jnp.asarray(np.asarray(biases, dtype=np.float32))
+        coupling_c_jnp = (
+            t.jnp.asarray(np.asarray(couplings[:n_constraint], dtype=np.float32))
+            if n_constraint
+            else None
+        )
+        coupling_i_jnp = (
+            t.jnp.asarray(np.asarray(couplings[n_constraint:], dtype=np.float32))
+            if image.inter_edges
+            else None
+        )
+
+        cache_key = (
+            int(image.n_spins),
+            tuple(tuple(block) for block in image.color_blocks),
+            tuple(image.constraint_edges),
+            tuple(image.inter_edges),
+            int(n_warmup),
+            int(n_samples),
+            int(steps_per_sample),
+        )
+        cached = self._spin_cache.get(cache_key)
+        if cached is None:
+            nodes = [t.SpinNode() for _ in range(image.n_spins)]
+            node_block = t.Block(nodes)
+            free_blocks = [
+                t.Block([nodes[index] for index in block])
+                for block in image.color_blocks
+            ]
+            observe = node_block
+            spec = t.BlockGibbsSpec(free_blocks, [])
+            samplers = [t.SpinGibbsConditional() for _ in free_blocks]
+            schedule = t.SamplingSchedule(
+                n_warmup=n_warmup,
+                n_samples=n_samples,
+                steps_per_sample=steps_per_sample,
+            )
+            scale0 = t.jnp.asarray(betas[0], dtype=t.jnp.float32)
+            factors0 = [t.SpinEBMFactor([node_block], bias_jnp * scale0)]
+            if n_constraint:
+                c_left = t.Block([nodes[i] for i, _j in image.constraint_edges])
+                c_right = t.Block([nodes[j] for _i, j in image.constraint_edges])
+                factors0.append(
+                    t.SpinEBMFactor([c_left, c_right], coupling_c_jnp * scale0)
+                )
+            else:
+                c_left = None
+                c_right = None
+            if image.inter_edges:
+                i_left = t.Block([nodes[i] for i, _j in image.inter_edges])
+                i_right = t.Block([nodes[j] for _i, j in image.inter_edges])
+                factors0.append(
+                    t.SpinEBMFactor([i_left, i_right], coupling_i_jnp * scale0)
+                )
+            else:
+                i_left = None
+                i_right = None
+            prog0 = t.FactorSamplingProgram(spec, samplers, factors0, [])
+            _, static_prog = t.eqx.partition(prog0, t.eqx.is_array)
+
+            @t.jax.jit
+            def run_stage(k_samp, dynamic_prog, state_in):
+                prog = t.eqx.combine(dynamic_prog, static_prog)
+                return t.sample_states(k_samp, prog, schedule, state_in, [], [observe])
+
+            cached = (
+                node_block,
+                c_left,
+                c_right,
+                i_left,
+                i_right,
+                spec,
+                samplers,
+                run_stage,
+            )
+            self._spin_cache[cache_key] = cached
+        else:
+            (
+                node_block,
+                c_left,
+                c_right,
+                i_left,
+                i_right,
+                spec,
+                samplers,
+                run_stage,
+            ) = cached
 
         key = t.jax.random.key(int(seed))
         key, key_init = t.jax.random.split(key, 2)
@@ -283,43 +375,22 @@ class ThrmlDomainWallBackend:
         state = [
             t.jnp.asarray(init_bool[list(block)]) for block in image.color_blocks
         ]
-        schedule = t.SamplingSchedule(
-            n_warmup=n_warmup,
-            n_samples=n_samples,
-            steps_per_sample=steps_per_sample,
-        )
         collected: list[np.ndarray] = []
         for beta in betas:
             scale = t.jnp.asarray(beta, dtype=t.jnp.float32)
-            factors = [
-                t.SpinEBMFactor(
-                    [t.Block(nodes)],
-                    t.jnp.asarray(bias_np) * scale,
-                )
-            ]
+            factors = [t.SpinEBMFactor([node_block], bias_jnp * scale)]
             if n_constraint:
-                left = [nodes[i] for i, _j in image.constraint_edges]
-                right = [nodes[j] for _i, j in image.constraint_edges]
                 factors.append(
-                    t.SpinEBMFactor(
-                        [t.Block(left), t.Block(right)],
-                        t.jnp.asarray(coupling_np[:n_constraint]) * scale,
-                    )
+                    t.SpinEBMFactor([c_left, c_right], coupling_c_jnp * scale)
                 )
             if image.inter_edges:
-                left = [nodes[i] for i, _j in image.inter_edges]
-                right = [nodes[j] for _i, j in image.inter_edges]
                 factors.append(
-                    t.SpinEBMFactor(
-                        [t.Block(left), t.Block(right)],
-                        t.jnp.asarray(coupling_np[n_constraint:]) * scale,
-                    )
+                    t.SpinEBMFactor([i_left, i_right], coupling_i_jnp * scale)
                 )
             program = t.FactorSamplingProgram(spec, samplers, factors, [])
+            dynamic_prog, _ = t.eqx.partition(program, t.eqx.is_array)
             key, key_sample = t.jax.random.split(key, 2)
-            samples = t.sample_states(
-                key_sample, program, schedule, state, [], [observe]
-            )
+            samples = run_stage(key_sample, dynamic_prog, state)
             if len(samples) != 1:
                 raise RuntimeError(
                     f"sample_states returned {len(samples)} blocks; "

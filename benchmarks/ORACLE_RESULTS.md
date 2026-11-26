@@ -106,3 +106,79 @@ Seeds scored: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15. Extropic median
 A larger IGD is farther from the analytic front. This sampler does not share Bend's SBX, polynomial mutation, or population. Matching `pop * gens` spends a similar number of objective calls; it does not reproduce the U-NSGA-III trajectory. `Extropic n` is `front_rows` from the IGD script (unique non-dominated rows), which is not forced to equal the Bend population.
 
 These ExactEw numbers stay in this file; the dominated-spike card is [docs/spikes/dominated/2026-10-07-exactew-continuous-not-unsga3.md](../docs/spikes/dominated/2026-10-07-exactew-continuous-not-unsga3.md).
+
+---
+
+## Post-Hastings-fix 15-seed refresh (2026-11-26)
+
+Generated 2026-11-26T23:23:24Z after fixing the inverted Metropolis–Hastings boundary-normalization term in `ExactEwContinuousBackend` (`+ log_z_old - log_z_new`, restoring exact detailed balance at \(\beta = 0\) and avoiding unbounded rejection sampling). The historical pre-fix tables above remain untouched for the dominated-spike audit trail.
+
+Same 15 seeds (1–15), same budgets (`ZDT1` 5200, `ZDT2` 13000, `DTLZ2` 13741), scored with `unsga3-bend/ab/igd_vs_pymoo.py`. The dominated-spike conclusion (`dominated:igd`, not U-NSGA-III) still holds under exact detailed balance.
+
+### Medians (post-Hastings fix)
+
+| Problem | Seeds scored | pre-fix ExactEw median (`igd=`) | post-Hastings ExactEw median (`igd=`) | Extropic objective evals | yardstick pop×gens |
+|---|---:|---:|---:|---:|---:|
+| zdt1 | 15 | 2.3144182108708304 | 2.36674998182426 | 5200 | 5200 |
+| zdt2 | 15 | 3.3547378401332653 | 2.975892237735412 | 13000 | 13000 |
+| dtlz2 | 15 | 0.27690988609911626 | 0.31253882821848694 | 13741 | 13800 |
+
+### ZDT1 (post-Hastings fix)
+
+| seed | Extropic IGD | Extropic n | objective evals | recorded samples | pf_rows | pf_source |
+|-----:|-------------:|-----------:|----------------:|-----------------:|--------:|-----------|
+| 1 | 2.1161906786839424 | 17 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 2 | 2.3780229644967275 | 14 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 3 | 2.549339192557533 | 9 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 4 | 2.0652765270539546 | 19 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 5 | 2.4188954716922275 | 20 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 6 | 2.0343789156607075 | 27 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 7 | 2.282051767509923 | 19 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 8 | 2.2824658761404555 | 22 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 9 | 2.197840815726789 | 9 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 10 | 2.5053083216026057 | 13 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 11 | 2.4164323995347106 | 18 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 12 | 2.554188180743696 | 14 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 13 | 2.5369115908914193 | 19 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 14 | 1.7779338742910489 | 13 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+| 15 | 2.36674998182426 | 29 | 5200 | 4680 | 500 | analytic-zdt1 n=500 |
+
+### ZDT2 (post-Hastings fix)
+
+| seed | Extropic IGD | Extropic n | objective evals | recorded samples | pf_rows | pf_source |
+|-----:|-------------:|-----------:|----------------:|-----------------:|--------:|-----------|
+| 1 | 3.3122019968182106 | 8 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 2 | 2.921543783881522 | 13 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 3 | 3.3567225094774384 | 6 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 4 | 2.975892237735412 | 10 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 5 | 3.1565061431457173 | 11 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 6 | 2.9552926798038546 | 4 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 7 | 2.4852520955668616 | 10 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 8 | 2.876714679400701 | 11 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 9 | 3.3963825171606974 | 9 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 10 | 3.3665775949069103 | 6 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 11 | 2.589364557292575 | 14 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 12 | 3.6280626494289225 | 7 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 13 | 3.2545921170720415 | 11 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 14 | 2.9289262296864713 | 8 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+| 15 | 2.675047594488208 | 12 | 13000 | 11700 | 500 | analytic-zdt2 n=500 |
+
+### DTLZ2 (post-Hastings fix)
+
+| seed | Extropic IGD | Extropic n | objective evals | recorded samples | pf_rows | pf_source |
+|-----:|-------------:|-----------:|----------------:|-----------------:|--------:|-----------|
+| 1 | 0.2967574665609631 | 166 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 2 | 0.31855827631881195 | 108 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 3 | 0.32252300065571377 | 139 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 4 | 0.3216135056921842 | 173 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 5 | 0.31253882821848694 | 127 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 6 | 0.29951888291569256 | 137 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 7 | 0.2953044659827067 | 124 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 8 | 0.33570440252421985 | 125 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 9 | 0.29730796738913745 | 111 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 10 | 0.28349704614077903 | 105 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 11 | 0.32144316797036726 | 150 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 12 | 0.293632477465276 | 133 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 13 | 0.33676232927505434 | 164 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 14 | 0.27505597944769616 | 128 | 13741 | 12285 | 91 | pymoo-das-dennis |
+| 15 | 0.3209051240761696 | 169 | 13741 | 12285 | 91 | pymoo-das-dennis |

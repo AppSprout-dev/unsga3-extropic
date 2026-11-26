@@ -11,8 +11,9 @@ def simplex_weights(n_weights: int, n_obj: int = 2) -> np.ndarray:
     """Generate ``n_weights`` non-negative weight vectors on the simplex.
 
     For 2 objectives this is a uniform grid on w1 + w2 = 1.
-    For M>2 uses a Das–Dennis-style structured set when possible, else
-    Dirichlet samples (seeded for reproducibility via ``rng``).
+    For M > 2 uses a Das–Dennis structured set when its size stays bounded,
+    falling back to deterministically seeded Dirichlet samples to avoid
+    combinatorial blowup at high M.
     """
     if n_obj < 2:
         raise ValueError("n_obj must be >= 2")
@@ -28,12 +29,17 @@ def simplex_weights(n_weights: int, n_obj: int = 2) -> np.ndarray:
         w = np.stack([w1, 1.0 - w1], axis=1)
         return w.astype(np.float64)
 
-    # Das–Dennis for small H such that C(H+M-1, M-1) ~= n_weights
+    # Das–Dennis for small H such that C(H+M-1, M-1) stays bounded.
+    max_lattice = max(int(n_weights) * 4, 10_000)
+    if _n_das_dennis(1, n_obj) > max_lattice:
+        rng = np.random.default_rng(0)
+        return rng.dirichlet(np.ones(n_obj), size=n_weights).astype(np.float64)
+
     H = 1
-    while _n_das_dennis(H, n_obj) < n_weights:
-        H += 1
-        if H > 40:
+    while _n_das_dennis(H, n_obj) < n_weights and H < 40:
+        if _n_das_dennis(H + 1, n_obj) > max_lattice:
             break
+        H += 1
     pts = _das_dennis(H, n_obj)
     if len(pts) > n_weights:
         # subsample evenly
