@@ -9,7 +9,7 @@ when ``partitions = 12`` and ``M = 3``). pymoo is not imported.
 
 from __future__ import annotations
 
-from typing import Never
+from typing import NoReturn
 
 import numpy as np
 
@@ -21,7 +21,7 @@ PF_POINTS = 500
 PARTITIONS = 12
 
 
-def _unreachable(name: Never) -> Never:
+def _unreachable(name: object) -> NoReturn:
     raise AssertionError(f"unhandled oracle problem {name!r}")
 
 

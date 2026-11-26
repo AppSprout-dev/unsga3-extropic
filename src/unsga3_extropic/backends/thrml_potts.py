@@ -30,7 +30,7 @@ here.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Callable
 
@@ -46,9 +46,12 @@ PottsBuilder = Callable[
 # objective_fn(states[..., n]) -> (..., n_obj). states are integers in [0, K).
 ObjectiveFn = Callable[[np.ndarray], np.ndarray]
 
+_POTTS_ENERGY_CACHE: dict = {}
+
 
 def _load_thrml() -> SimpleNamespace:
     """Import JAX and THRML. Optional at package import time."""
+    import equinox as eqx
     import jax
     import jax.numpy as jnp
     from thrml import (
@@ -66,6 +69,7 @@ def _load_thrml() -> SimpleNamespace:
     )
 
     return SimpleNamespace(
+        eqx=eqx,
         jax=jax,
         jnp=jnp,
         Block=Block,
@@ -184,22 +188,46 @@ def factorized_potts_energy(
         raise ValueError(
             f"states shape {states_np.shape} does not end with n_sites={n_sites}"
         )
-    nodes = [t.CategoricalNode() for _ in range(n_sites)]
-    unary = t.jnp.asarray(np.asarray(unary_weights, dtype=np.float32))
-    factors = [t.CategoricalEBMFactor([t.Block(nodes)], unary)]
-    if len(edges):
-        left = [nodes[i] for i, _j in edges]
-        right = [nodes[j] for _i, j in edges]
-        pair = t.jnp.asarray(np.asarray(pairwise_weights, dtype=np.float32))
-        factors.append(t.CategoricalEBMFactor([t.Block(left), t.Block(right)], pair))
+    unary_arr = np.asarray(unary_weights, dtype=np.float32)
+    pair_arr = np.asarray(pairwise_weights, dtype=np.float32)
+    edges_tuple = tuple((int(i), int(j)) for i, j in edges)
+    key = (int(n_sites), int(unary_arr.shape[-1]), edges_tuple)
+
+    cached = _POTTS_ENERGY_CACHE.get(key)
+    unary = t.jnp.asarray(unary_arr)
+    pair = t.jnp.asarray(pair_arr) if edges_tuple else None
+    if cached is None:
+        nodes = [t.CategoricalNode() for _ in range(n_sites)]
+        node_block = t.Block(nodes)
+        observe = [node_block]
+        factors = [t.CategoricalEBMFactor([node_block], unary)]
+        if edges_tuple:
+            left_block = t.Block([nodes[i] for i, _j in edges_tuple])
+            right_block = t.Block([nodes[j] for _i, j in edges_tuple])
+            factors.append(t.CategoricalEBMFactor([left_block, right_block], pair))
+        else:
+            left_block = None
+            right_block = None
+        ebm0 = t.FactorizedEBM(factors)
+        _, static_ebm = t.eqx.partition(ebm0, t.eqx.is_array)
+
+        @t.jax.jit
+        def eval_batch(dynamic_ebm, flat_states):
+            ebm = t.eqx.combine(dynamic_ebm, static_ebm)
+            return t.jax.vmap(lambda st: ebm.energy([st], observe))(flat_states)
+
+        cached = (node_block, left_block, right_block, eval_batch)
+        _POTTS_ENERGY_CACHE[key] = cached
+    else:
+        node_block, left_block, right_block, eval_batch = cached
+
+    factors = [t.CategoricalEBMFactor([node_block], unary)]
+    if edges_tuple:
+        factors.append(t.CategoricalEBMFactor([left_block, right_block], pair))
     ebm = t.FactorizedEBM(factors)
-    observe = [t.Block(nodes)]
+    dynamic_ebm, _ = t.eqx.partition(ebm, t.eqx.is_array)
     flat = np.ascontiguousarray(states_np, dtype=np.uint8).reshape(-1, n_sites)
-
-    def one(state):
-        return ebm.energy([state], observe)
-
-    energies = t.jax.vmap(one)(t.jnp.asarray(flat))
+    energies = eval_batch(dynamic_ebm, t.jnp.asarray(flat))
     out = np.asarray(energies, dtype=np.float64).reshape(states_np.shape[:-1])
     return out
 
@@ -218,6 +246,7 @@ class ThrmlPottsBackend:
     build_potts: PottsBuilder
     objective_fn: ObjectiveFn
     coloring: tuple[tuple[int, ...], ...] | None = None
+    _compiled_cache: dict = field(default_factory=dict, init=False, repr=False)
 
     def sample_weight(
         self,
@@ -244,17 +273,58 @@ class ThrmlPottsBackend:
         )
 
         t = _load_thrml()
-        nodes = [t.CategoricalNode() for _ in range(self.n_sites)]
-        free_blocks = [t.Block([nodes[i] for i in idxs]) for idxs in coloring]
-        observe = t.Block(nodes)
-        spec = t.BlockGibbsSpec(free_blocks, [])
-        # K lives on the conditional. One conditional per free block, as in
-        # example 03. Reused across temperatures; only the weights change.
-        samplers = [
-            t.CategoricalGibbsConditional(int(self.n_categories)) for _ in free_blocks
-        ]
-        if any(int(s.n_categories) != int(self.n_categories) for s in samplers):
-            raise RuntimeError("CategoricalGibbsConditional.n_categories != K")
+        cache_key = (
+            tuple(edges),
+            coloring,
+            int(n_warmup),
+            int(n_samples),
+            int(steps_per_sample),
+        )
+        unary_jnp = t.jnp.asarray(unary_np)
+        pair_jnp = t.jnp.asarray(pair_np) if edges else None
+        cached = self._compiled_cache.get(cache_key)
+        if cached is None:
+            nodes = [t.CategoricalNode() for _ in range(self.n_sites)]
+            node_block = t.Block(nodes)
+            free_blocks = [t.Block([nodes[i] for i in idxs]) for idxs in coloring]
+            observe = node_block
+            spec = t.BlockGibbsSpec(free_blocks, [])
+            # K lives on the conditional. One conditional per free block, as in
+            # example 03. Reused across temperatures; only the weights change.
+            samplers = [
+                t.CategoricalGibbsConditional(int(self.n_categories))
+                for _ in free_blocks
+            ]
+            if any(int(s.n_categories) != int(self.n_categories) for s in samplers):
+                raise RuntimeError("CategoricalGibbsConditional.n_categories != K")
+            schedule = t.SamplingSchedule(
+                n_warmup=n_warmup,
+                n_samples=n_samples,
+                steps_per_sample=steps_per_sample,
+            )
+            scale0 = t.jnp.asarray(betas[0], dtype=t.jnp.float32)
+            factors0 = [t.CategoricalEBMFactor([node_block], unary_jnp * scale0)]
+            if edges:
+                left_block = t.Block([nodes[i] for i, _j in edges])
+                right_block = t.Block([nodes[j] for _i, j in edges])
+                factors0.append(
+                    t.CategoricalEBMFactor([left_block, right_block], pair_jnp * scale0)
+                )
+            else:
+                left_block = None
+                right_block = None
+            prog0 = t.FactorSamplingProgram(spec, samplers, factors0, [])
+            _, static_prog = t.eqx.partition(prog0, t.eqx.is_array)
+
+            @t.jax.jit
+            def run_stage(k_samp, dynamic_prog, state_in):
+                prog = t.eqx.combine(dynamic_prog, static_prog)
+                return t.sample_states(k_samp, prog, schedule, state_in, [], [observe])
+
+            cached = (node_block, left_block, right_block, spec, samplers, run_stage)
+            self._compiled_cache[cache_key] = cached
+        else:
+            node_block, left_block, right_block, spec, samplers, run_stage = cached
 
         key = t.jax.random.key(int(seed))
         state = []
@@ -271,27 +341,17 @@ class ThrmlPottsBackend:
             )
 
         collected: list[np.ndarray] = []
-        schedule = t.SamplingSchedule(
-            n_warmup=n_warmup,
-            n_samples=n_samples,
-            steps_per_sample=steps_per_sample,
-        )
         for beta in betas:
             scale = t.jnp.asarray(beta, dtype=t.jnp.float32)
-            unary_b = t.jnp.asarray(unary_np) * scale
-            factors = [t.CategoricalEBMFactor([t.Block(nodes)], unary_b)]
+            factors = [t.CategoricalEBMFactor([node_block], unary_jnp * scale)]
             if edges:
-                left = [nodes[i] for i, _j in edges]
-                right = [nodes[j] for _i, j in edges]
-                pair_b = t.jnp.asarray(pair_np) * scale
                 factors.append(
-                    t.CategoricalEBMFactor([t.Block(left), t.Block(right)], pair_b)
+                    t.CategoricalEBMFactor([left_block, right_block], pair_jnp * scale)
                 )
             program = t.FactorSamplingProgram(spec, samplers, factors, [])
+            dynamic_prog, _ = t.eqx.partition(program, t.eqx.is_array)
             key, k_samp = t.jax.random.split(key, 2)
-            samples = t.sample_states(
-                k_samp, program, schedule, state, [], [observe]
-            )
+            samples = run_stage(k_samp, dynamic_prog, state)
             if len(samples) != 1:
                 raise RuntimeError(
                     f"sample_states returned {len(samples)} blocks; "

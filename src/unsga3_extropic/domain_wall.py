@@ -86,7 +86,9 @@ class DomainWallImage:
     def valid_mask(self, spins_pm1: np.ndarray) -> np.ndarray:
         """True where every site is a single domain wall (a thermometer)."""
         spins = self._as_spins(spins_pm1)
-        finite_pm1 = np.all((spins > 0.0) | (spins < 0.0), axis=-1)
+        finite_pm1 = np.all(
+            np.isfinite(spins) & ((spins == 1.0) | (spins == -1.0)), axis=-1
+        )
         valid = finite_pm1
         width = self.n_categories - 1
         if width >= 2:

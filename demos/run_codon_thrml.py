@@ -14,9 +14,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
+
+os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -41,6 +44,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Short anneal for CI (fewer weights, betas, and samples).",
     )
+    parser.add_argument(
+        "--append-log",
+        action="store_true",
+        help="Also append the run record to tracked benchmarks/records/runs.jsonl.",
+    )
     return parser.parse_args(argv)
 
 
@@ -55,7 +63,8 @@ def main(argv: list[str] | None = None) -> int:
     elapsed = time.perf_counter() - t0
     record["notes"] = record["notes"] + f" elapsed_s={elapsed:.3f}. version={__version__}."
     append_run_record(out_dir / "codon_runs.jsonl", record)
-    append_run_record(ROOT / "benchmarks" / "records" / "runs.jsonl", record)
+    if args.append_log:
+        append_run_record(ROOT / "benchmarks" / "records" / "runs.jsonl", record)
     front = load_front(front_path, n_obj=2)
 
     problem = CodonIsingProblem(**codon_problem_kwargs())
@@ -90,7 +99,8 @@ def main(argv: list[str] | None = None) -> int:
     np.save(out_dir / "codon_exact_front.npy", f_exact)
     print(f"  wrote {out_dir / 'codon_summary.json'}")
     print(f"  appended {out_dir / 'codon_runs.jsonl'}")
-    print(f"  appended {ROOT / 'benchmarks' / 'records' / 'runs.jsonl'}")
+    if args.append_log:
+        print(f"  appended {ROOT / 'benchmarks' / 'records' / 'runs.jsonl'}")
     return 0
 
 

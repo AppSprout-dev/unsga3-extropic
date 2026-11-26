@@ -62,7 +62,8 @@ def generational_distance(
     """Mean distance from each row of ``front`` to the nearest reference row.
 
     ``(mean_i d_i**p) ** (1/p)`` with Euclidean ``d_i``. An empty ``front``
-    returns ``0.0``. An empty ``reference`` raises.
+    returns ``inf`` (matching ``inverted_generational_distance``). An empty
+    ``reference`` raises.
     """
     got = np.asarray(front, dtype=np.float64)
     ref = np.asarray(reference, dtype=np.float64)
@@ -79,7 +80,7 @@ def generational_distance(
     if len(ref) == 0:
         raise ValueError("reference front is empty")
     if len(got) == 0:
-        return 0.0
+        return float("inf")
     diff = got[:, None, :] - ref[None, :, :]
     nearest = np.linalg.norm(diff, axis=-1).min(axis=1)
     return float(np.mean(nearest**p) ** (1.0 / p))
@@ -152,14 +153,19 @@ def load_front(path: str | Path, *, n_obj: int) -> np.ndarray:
 def compare_fronts(
     obtained: np.ndarray,
     reference: np.ndarray | None = None,
+    *,
+    hv_ref: tuple[float, float] | None = None,
 ) -> dict:
     """Score a minimization front.
 
-    ``hypervolume_2d`` is set when the front has two objectives, using a
-    reference point just beyond the max of the obtained and reference rows.
-    ``generational_distance`` and ``coverage`` are set when both fronts are
-    non-empty. ``coverage`` is the fraction of ``reference`` weakly dominated
-    by ``obtained``.
+    ``hypervolume_2d`` is set when the front has two objectives. When
+    ``hv_ref`` is provided, that exact reference point is used. Otherwise,
+    when a non-empty 2-D ``reference`` front is supplied, ``hv_ref`` is
+    anchored solely to ``reference`` (``max + 0.1 * max(|max|, 1)``), so
+    hypervolume stays strictly monotonic across obtained fronts and
+    comparable across runs and seeds. Only when ``reference`` is absent
+    does ``hv_ref`` fall back to ``obtained``. ``generational_distance``
+    and ``coverage`` are set when both fronts are non-empty.
     """
     got = np.asarray(obtained, dtype=np.float64)
     if got.ndim != 2:
@@ -172,18 +178,28 @@ def compare_fronts(
         "coverage": None,
     }
     ref = None if reference is None else np.asarray(reference, dtype=np.float64)
-    if got.shape[1] == 2 and len(got):
-        span = got
-        if ref is not None and ref.ndim == 2 and ref.shape[1] == 2 and len(ref):
-            span = np.vstack([got, ref])
-        hv_ref = (
-            float(span[:, 0].max() + 0.1 * max(abs(float(span[:, 0].max())), 1.0)),
-            float(span[:, 1].max() + 0.1 * max(abs(float(span[:, 1].max())), 1.0)),
-        )
-        out["hypervolume_2d"] = hypervolume_2d(got, ref=hv_ref)
-        out["hv_ref"] = [hv_ref[0], hv_ref[1]]
-    elif got.shape[1] == 2 and len(got) == 0:
-        out["hypervolume_2d"] = 0.0
+    if got.shape[1] == 2:
+        chosen_ref: tuple[float, float] | None = None
+        if hv_ref is not None:
+            r0, r1 = float(hv_ref[0]), float(hv_ref[1])
+            if not (np.isfinite(r0) and np.isfinite(r1)):
+                raise ValueError(f"hv_ref must be finite, got {hv_ref!r}")
+            chosen_ref = (r0, r1)
+        elif ref is not None and ref.ndim == 2 and ref.shape[1] == 2 and len(ref):
+            chosen_ref = (
+                float(ref[:, 0].max() + 0.1 * max(abs(float(ref[:, 0].max())), 1.0)),
+                float(ref[:, 1].max() + 0.1 * max(abs(float(ref[:, 1].max())), 1.0)),
+            )
+        elif len(got):
+            chosen_ref = (
+                float(got[:, 0].max() + 0.1 * max(abs(float(got[:, 0].max())), 1.0)),
+                float(got[:, 1].max() + 0.1 * max(abs(float(got[:, 1].max())), 1.0)),
+            )
+        if chosen_ref is not None:
+            out["hypervolume_2d"] = hypervolume_2d(got, ref=chosen_ref)
+            out["hv_ref"] = [chosen_ref[0], chosen_ref[1]]
+        else:
+            out["hypervolume_2d"] = 0.0
     if ref is not None and ref.ndim == 2 and len(ref) and len(got):
         out["generational_distance"] = generational_distance(got, ref)
         out["coverage"] = coverage(got, ref)

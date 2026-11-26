@@ -132,7 +132,10 @@ class TorxPswapCircuit:
         initial = np.array(state_pair, dtype=np.int32)
         swapped = np.array((state_pair[1], state_pair[0]), dtype=np.int32)
         stay_rate = float(np.mean(np.all(samples == initial, axis=1)))
-        swap_rate = float(np.mean(np.all(samples == swapped, axis=1)))
+        if state_pair[0] == state_pair[1]:
+            swap_rate = 0.0
+        else:
+            swap_rate = float(np.mean(np.all(samples == swapped, axis=1)))
         return PswapDraw(
             samples=samples,
             stay_rate=stay_rate,

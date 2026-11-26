@@ -24,7 +24,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Never
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -53,7 +53,7 @@ DEFAULT_REPORT = ROOT / "benchmarks" / "ORACLE_UNSGA3_RESULTS.md"
 EXACTEW_REPORT = ROOT / "benchmarks" / "ORACLE_RESULTS.md"
 
 
-def _unreachable(name: Never) -> Never:
+def _unreachable(name: object) -> NoReturn:
     raise AssertionError(f"unhandled oracle problem {name!r}")
 
 

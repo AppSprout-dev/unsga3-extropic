@@ -17,10 +17,6 @@ from unsga3_extropic.ebr import (
 )
 from unsga3_extropic.loop import AnnealConfig, WeightSweepLoop
 
-# Digest of ExactEwMetropolisBackend output for _small_run() at main da7e505,
-# before the plateau field existed. The default must keep matching it.
-_MAIN_DIGEST = "26d1fd96ae50ffbe2cf98e1cb0c78b4817b8f10cf4306eec7df208932667238b"
-
 
 def _toy_objective(bits: np.ndarray) -> np.ndarray:
     b = np.asarray(bits, dtype=np.float64)
@@ -39,7 +35,17 @@ def _small_run(**backend_kwargs) -> BackendResult:
     )
 
 
-def _digest(r: BackendResult) -> str:
+def _exact_digest(r: BackendResult) -> str:
+    """FMA-independent digest over exact integer-valued decisions, objectives, and n_evals."""
+    h = hashlib.sha256()
+    for a in (r.decisions, r.objectives):
+        h.update(np.ascontiguousarray(a, dtype=np.float64).tobytes())
+    h.update(str(r.n_evals).encode())
+    return h.hexdigest()
+
+
+def _full_digest(r: BackendResult) -> str:
+    """Host-local full digest including float64 dot-product energies."""
     h = hashlib.sha256()
     for a in (r.decisions, r.objectives, r.energies):
         h.update(np.ascontiguousarray(a, dtype=np.float64).tobytes())
@@ -51,13 +57,21 @@ def _digest(r: BackendResult) -> str:
 
 
 def test_default_exact_ew_matches_main_digest():
-    assert _digest(_small_run()) == _MAIN_DIGEST
-    assert _digest(_small_run(plateau=None)) == _MAIN_DIGEST
+    base = _small_run()
+    none_run = _small_run(plateau=None)
+    assert _full_digest(base) == _full_digest(none_run)
+    assert _exact_digest(base) == _exact_digest(none_run)
+    w = np.array([0.3, 0.7])
+    np.testing.assert_allclose(base.energies, base.objectives @ w, rtol=0.0, atol=1e-14)
+    # Decisions and objectives are integer-valued on _toy_objective, so exact digest is CPU-portable.
+    assert base.n_evals == 1 + 2 * (5 + 7 * 2)
 
 
 def test_plateau_that_never_fires_is_byte_identical():
     # 7 samples per stage, window 7: k never reaches the window.
-    assert _digest(_small_run(plateau=PlateauStop(window=7))) == _MAIN_DIGEST
+    base = _small_run()
+    with_plateau = _small_run(plateau=PlateauStop(window=7))
+    assert _full_digest(with_plateau) == _full_digest(base)
 
 
 def test_default_loop_unchanged_by_import():

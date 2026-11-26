@@ -24,7 +24,7 @@ are warmup. This schedule is not a search over betas.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Never
+from typing import Literal, NoReturn
 
 import numpy as np
 
@@ -35,7 +35,7 @@ ORACLE_SEEDS: tuple[int, ...] = tuple(range(1, 16))
 PARTITIONS = 12
 
 
-def _unreachable(name: Never) -> Never:
+def _unreachable(name: object) -> NoReturn:
     raise AssertionError(f"unhandled oracle problem {name!r}")
 
 

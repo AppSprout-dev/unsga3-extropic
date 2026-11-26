@@ -74,15 +74,15 @@
       ],
       "properties": {
         "nd_count": {"type": "integer", "minimum": 0},
-        "hypervolume_2d": {"type": ["number", "null"]},
+        "hypervolume_2d": {"type": ["number", "null"], "minimum": 0},
         "hv_ref": {
           "type": ["array", "null"],
           "prefixItems": [{"type": "number"}, {"type": "number"}],
           "minItems": 2,
           "maxItems": 2
         },
-        "generational_distance": {"type": ["number", "null"]},
-        "coverage": {"type": ["number", "null"]}
+        "generational_distance": {"type": ["number", "null"], "minimum": 0},
+        "coverage": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
       }
     },
     "artifacts": {

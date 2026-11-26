@@ -18,7 +18,7 @@ dependencies = [
 # JAX is a peer dependency (THRML pattern). Install jax separately for your platform.
 
 [project.optional-dependencies]
-dev = ["matplotlib>=3.8", "pytest>=8.0"]
+dev = ["pytest>=8.0"]
 cpu = ["jax[cpu]>=0.4.30"]
 # extro-torx requires Python >= 3.11. It is not a core dependency.
 # `pip install -e .` on Python 3.10 does not install it.

@@ -30,7 +30,7 @@ def test_generational_distance_and_coverage():
     reference = np.array([[0.0, 0.0], [1.0, 1.0]])
     front = np.array([[0.0, 1.0]])
     assert generational_distance(front, reference) == pytest.approx(1.0)
-    assert generational_distance(np.zeros((0, 2)), reference) == 0.0
+    assert generational_distance(np.zeros((0, 2)), reference) == float("inf")
     better = np.array([[0.0, 0.0]])
     worse = np.array([[1.0, 1.0], [0.5, 2.0]])
     assert coverage(better, worse) == pytest.approx(1.0)
